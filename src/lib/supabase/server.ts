@@ -1,6 +1,8 @@
 import { createServerClient } from "@supabase/ssr";
 import { cookies } from "next/headers";
 
+import type { Database } from "./database.types";
+
 import { getSupabaseEnv } from "./env";
 
 // 서버 컴포넌트·Server Action·Route Handler용. 요청마다 새로 만든다(전역에 두지 않는다).
@@ -8,7 +10,7 @@ export async function createClient() {
   const cookieStore = await cookies();
   const { url, publishableKey } = getSupabaseEnv();
 
-  return createServerClient(url, publishableKey, {
+  return createServerClient<Database>(url, publishableKey, {
     cookies: {
       getAll() {
         return cookieStore.getAll();
