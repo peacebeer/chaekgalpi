@@ -1,6 +1,8 @@
 import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
 
+import type { Database } from "./database.types";
+
 import { getSupabaseEnv } from "./env";
 
 // 만료가 가까운 세션을 갱신하고, 새 쿠키를 요청(서버 컴포넌트용)과 응답(브라우저용) 양쪽에 싣는다.
@@ -8,7 +10,7 @@ export async function updateSession(request: NextRequest) {
   let response = NextResponse.next({ request });
   const { url, publishableKey } = getSupabaseEnv();
 
-  const supabase = createServerClient(url, publishableKey, {
+  const supabase = createServerClient<Database>(url, publishableKey, {
     cookies: {
       getAll() {
         return request.cookies.getAll();

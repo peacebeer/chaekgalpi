@@ -3,8 +3,28 @@ import { describe, expect, test } from "vitest";
 import {
   DEFAULT_ERROR_MESSAGE,
   ERROR_MESSAGES,
+  toAuthErrorMessage,
   toErrorMessage,
 } from "./errors";
+
+describe("toAuthErrorMessage", () => {
+  test("Supabase Auth 오류 코드를 한국어 문구로 바꾼다", () => {
+    expect(
+      toAuthErrorMessage({
+        code: "invalid_credentials",
+        message: "Invalid login credentials",
+      }),
+    ).toBe("이메일 또는 비밀번호가 맞지 않아요.");
+    expect(toAuthErrorMessage("auth_callback_failed")).toContain("브라우저");
+  });
+
+  test("모르는 코드는 기본 문구로 바꾼다", () => {
+    expect(toAuthErrorMessage({ code: "unexpected_failure" })).toBe(
+      DEFAULT_ERROR_MESSAGE,
+    );
+    expect(toAuthErrorMessage(undefined)).toBe(DEFAULT_ERROR_MESSAGE);
+  });
+});
 
 describe("toErrorMessage", () => {
   test("DB 함수가 던진 키를 한국어 문구로 바꾼다", () => {
