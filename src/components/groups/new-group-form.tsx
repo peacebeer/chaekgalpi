@@ -45,7 +45,8 @@ export function NewGroupForm() {
   const [book, setBook] = useState(EMPTY_BOOK);
   const [group, setGroup] = useState(INITIAL_GROUP);
   const [source, setSource] = useState<"nlk" | "manual">("manual");
-  const [existing, setExisting] = useState(false);
+  // 같은 ISBN의 책이 이미 등록돼 있을 때의 선택. ""는 해당 없음 또는 아직 고르지 않음
+  const [choice, setChoice] = useState<"" | "reuse" | "own">("");
 
   const [query, setQuery] = useState("");
   const [search, setSearch] = useState<BookSearchResult | null>(null);
@@ -53,6 +54,14 @@ export function NewGroupForm() {
   const [searching, startSearch] = useTransition();
 
   const errors = state.fieldErrors ?? {};
+  // 등록된 목차를 그대로 쓰는 동안에는 책 정보를 고칠 수 없다.
+  const existing = choice === "reuse";
+  // 직접 입력한 ISBN이 이미 등록된 책이라고 서버가 알려 준 경우
+  const conflictIsbn = state.values?.conflictIsbn;
+  const mustChoose =
+    choice === "" &&
+    Boolean(conflictIsbn) &&
+    book.isbn.replace(/[s-]/g, "").toUpperCase() === conflictIsbn;
   const chapterCount = parseChapterLines(book.chapters).length;
 
   function editBook(field: keyof typeof EMPTY_BOOK, value: string) {
@@ -77,11 +86,11 @@ export function NewGroupForm() {
       const { chaptersText, existing: saved, ...fields } = result.book;
       setBook({ ...fields, chapters: chaptersText });
       setSource("nlk");
-      setExisting(saved);
+      setChoice(saved ? "reuse" : "");
       setSearch(null);
       setNotice(
         saved
-          ? "이미 책갈피에 등록된 책이에요. 등록된 목차를 그대로 써요."
+          ? null
           : chaptersText
             ? "책 정보와 목차를 불러왔어요. 목차가 실제 책과 맞는지 확인해 주세요."
             : "책 정보를 불러왔어요. 이 책은 목차 자료가 없어서 직접 입력해야 해요.",
@@ -92,7 +101,7 @@ export function NewGroupForm() {
   function resetBook() {
     setBook(EMPTY_BOOK);
     setSource("manual");
-    setExisting(false);
+    setChoice("");
     setNotice(null);
   }
 
@@ -181,6 +190,35 @@ export function NewGroupForm() {
             )}
           </div>
           <input type="hidden" name="source" value={source} />
+          <input type="hidden" name="bookChoice" value={choice} />
+          {(choice !== "" || mustChoose) && (
+            <div className="flex flex-col gap-2 rounded-lg border p-3 text-sm">
+              <p>
+                {choice === "own"
+                  ? "내 목차로 따로 만들어요. 아래 목차를 원하는 대로 고쳐 주세요. 따로 만든 책은 ISBN 없이 저장돼요."
+                  : "이미 책갈피에 등록된 책이에요. 등록된 목차를 그대로 쓰거나, 내 목차로 따로 만들 수 있어요."}
+              </p>
+              <div className="flex flex-wrap gap-2">
+                <Button
+                  type="button"
+                  size="sm"
+                  variant={choice === "reuse" ? "default" : "outline"}
+                  onClick={() => choose(book.isbn)}
+                  disabled={searching}
+                >
+                  등록된 목차 그대로 쓰기
+                </Button>
+                <Button
+                  type="button"
+                  size="sm"
+                  variant={choice === "own" ? "default" : "outline"}
+                  onClick={() => setChoice("own")}
+                >
+                  내 목차로 따로 만들기
+                </Button>
+              </div>
+            </div>
+          )}
           <Field
             name="title"
             label="책 제목"

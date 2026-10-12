@@ -128,19 +128,31 @@ export async function pickBook(isbn: string): Promise<PickBookResult> {
   }
 }
 
-// 대표 도서를 정한다: 같은 ISBN으로 등록된 책이 있으면 재사용하고, 없으면 새로 등록한다.
+// 같은 ISBN의 책이 이미 등록돼 있을 때: 등록된 목차를 그대로 쓸지, 내 목차로 따로 등록할지
+type BookChoice = "reuse" | "own" | "";
+
+const BOOK_CONFLICT =
+  "이 ISBN의 책은 이미 책갈피에 등록돼 있어요. 등록된 목차를 쓸지, 내 목차로 따로 만들지 골라 주세요.";
+
+// 대표 도서를 정한다: 같은 ISBN으로 등록된 책이 있으면 고른 대로 재사용하거나 따로 등록한다.
 async function resolveBookId(
   supabase: SupabaseServerClient,
   userId: string,
   book: BookInput,
-): Promise<{ bookId: string } | { error: unknown }> {
+  choice: BookChoice,
+): Promise<{ bookId: string } | { error: unknown } | { conflictIsbn: string }> {
   let isbn = book.isbn;
   let bookId: string | null = null;
 
   if (isbn) {
     const saved = await findUsableBook(supabase, isbn);
-    if (saved && saved.book_chapters.length > 0) return { bookId: saved.id };
-    if (saved && saved.created_by === userId) {
+    if (saved && saved.book_chapters.length > 0) {
+      if (choice === "reuse") return { bookId: saved.id };
+      // 고르지 않았으면 입력한 목차를 말없이 버리지 않고 되묻는다.
+      if (choice !== "own") return { conflictIsbn: isbn };
+      // 내 목차로 따로 등록: ISBN은 책 한 권에만 붙을 수 있어 비워 둔다.
+      isbn = null;
+    } else if (saved && saved.created_by === userId) {
       // 내가 등록하다가 목차 저장에 실패했던 책: 목차만 이어서 넣는다.
       bookId = saved.id;
     } else if (saved) {
@@ -214,7 +226,16 @@ export async function createGroup(
   }
 
   const supabase = await createClient();
-  const resolved = await resolveBookId(supabase, user.id, book.data);
+  const choiceInput = textOf(formData, "bookChoice");
+  const choice: BookChoice =
+    choiceInput === "reuse" || choiceInput === "own" ? choiceInput : "";
+  const resolved = await resolveBookId(supabase, user.id, book.data, choice);
+  if ("conflictIsbn" in resolved) {
+    return {
+      error: BOOK_CONFLICT,
+      values: { conflictIsbn: resolved.conflictIsbn },
+    };
+  }
   if ("error" in resolved) return { error: toErrorMessage(resolved.error) };
 
   // 리더 가입은 DB 트리거가 처리한다. 방금 만든 행은 가입이 끝난 뒤에야 보이므로
