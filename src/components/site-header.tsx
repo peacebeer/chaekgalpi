@@ -46,6 +46,12 @@ async function UserMenu() {
   return (
     <nav className="flex items-center gap-1">
       <Link
+        href="/groups"
+        className={buttonVariants({ variant: "ghost", size: "sm" })}
+      >
+        그룹
+      </Link>
+      <Link
         href="/profile"
         className={buttonVariants({ variant: "ghost", size: "sm" })}
       >

@@ -31,9 +31,12 @@ export const bookChapterSchema = z.object({
     .transform((value) => value ?? null),
 });
 
+export const MAX_CHAPTERS = 300;
+
 export const bookChaptersSchema = z
   .array(bookChapterSchema)
   .min(1, "목차에 장을 하나 이상 입력해 주세요.")
+  .max(MAX_CHAPTERS, `목차는 ${MAX_CHAPTERS}장까지 입력할 수 있어요.`)
   .refine(
     (chapters) =>
       new Set(chapters.map((chapter) => chapter.number)).size ===
