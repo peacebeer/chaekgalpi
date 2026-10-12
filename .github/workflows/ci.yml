@@ -1,0 +1,40 @@
+# 앱 검사: 린트 → 포맷 → 타입 → 단위 테스트 → 빌드
+# 하나라도 실패하면 PR을 main에 합치지 않는다.
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  app:
+    runs-on: ubuntu-latest
+    env:
+      # 빌드용 자리표시자. 실제 값은 Vercel 환경 변수에만 넣는다.
+      NEXT_PUBLIC_SUPABASE_URL: http://127.0.0.1:54321
+      NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: ci-placeholder
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - name: Lint (ESLint)
+        run: npm run lint
+      - name: Format check (Prettier)
+        run: npm run format:check
+      - name: Type check (TypeScript)
+        run: npm run typecheck
+      - name: Unit tests (Vitest)
+        run: npm run test
+      - name: Build (Next.js)
+        run: npm run build

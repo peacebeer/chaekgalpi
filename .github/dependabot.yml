@@ -1,0 +1,19 @@
+version: 2
+updates:
+  # npm 패키지: 보안 패치는 즉시, 일반 업데이트는 주 1회 묶어서 PR
+  - package-ecosystem: npm
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+      timezone: Asia/Seoul
+    open-pull-requests-limit: 5
+    groups:
+      minor-and-patch:
+        update-types: [minor, patch]
+
+  # GitHub Actions 버전
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: monthly

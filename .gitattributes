@@ -1,0 +1,2 @@
+# Prettier(LF)와 맞추기 위해 Windows에서도 줄바꿈을 LF로 유지한다
+* text=auto eol=lf

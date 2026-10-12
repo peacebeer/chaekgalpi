@@ -1,0 +1,8 @@
+# 문서는 사람이 쓴 모양을 유지한다 (AGENTS.md의 Next.js 블록은 next dev가 다시 쓴다)
+*.md
+
+# 생성물
+playwright-report
+test-results
+supabase/.temp
+src/lib/supabase/database.types.ts
