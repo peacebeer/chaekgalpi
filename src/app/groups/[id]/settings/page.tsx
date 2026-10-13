@@ -92,7 +92,7 @@ async function Settings({
             return (
               <li
                 key={member.user_id}
-                className="flex items-start justify-between gap-3 px-3 py-2 text-sm"
+                className="flex flex-wrap items-start justify-between gap-x-3 px-3 py-2 text-sm"
               >
                 <span className="py-1">
                   {nickname}

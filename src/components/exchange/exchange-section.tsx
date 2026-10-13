@@ -49,10 +49,9 @@ type ExchangeSectionProps = {
 
 const FORMER_MEMBER = "나간 회원";
 const CARD = "bg-card rounded-xl border";
-// 수정·삭제·답글·숨기기 같은 보조 버튼 묶음: 오른쪽 가장자리에 붙이고,
-// 눌러서 펼쳐진 입력 칸은 한 줄을 다 쓰게 한다.
-const ACTIONS =
-  "ml-auto flex max-w-full flex-wrap items-start justify-end gap-1";
+// 수정·삭제·답글·숨기기 같은 보조 버튼 묶음: 줄의 남은 폭을 차지하고 오른쪽 끝에 붙인다.
+// 눌러서 펼쳐지는 입력 칸·확인 칸은 이 묶음 안에서 버튼 아래 줄에 놓여, 버튼이 움직이지 않는다.
+const ACTIONS = "flex min-w-0 flex-1 flex-wrap items-start justify-end gap-1";
 
 // 이름 첫 글자를 넣은 동그라미
 function Avatar({ name, small = false }: { name: string; small?: boolean }) {
