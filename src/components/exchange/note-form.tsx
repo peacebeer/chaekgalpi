@@ -62,10 +62,10 @@ export function NoteForm({
           )}
           <Textarea
             name="body"
-            rows={3}
+            rows={4}
             aria-label={label}
             placeholder={placeholder}
-            className="bg-card min-h-20"
+            className="bg-card min-h-28"
             autoFocus
           />
           {(state.error ?? state.fieldErrors?.body) && (

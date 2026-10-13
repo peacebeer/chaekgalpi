@@ -53,7 +53,7 @@ export function EditForm({
         <form
           action={formAction}
           data-open
-          className="order-last flex w-full basis-full flex-col gap-2 text-left"
+          className="order-last mt-2 flex w-full basis-full flex-col gap-2 text-left"
         >
           {Object.entries(fields).map(([key, value]) => (
             <input key={key} type="hidden" name={key} value={value} />
