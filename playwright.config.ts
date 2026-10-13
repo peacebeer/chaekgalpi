@@ -1,10 +1,17 @@
+import { existsSync } from "node:fs";
+
 import { defineConfig, devices } from "@playwright/test";
+
+// 로컬에서는 .env.local의 값(Supabase 주소·키, E2E 계정)을 테스트와 개발 서버가 함께 쓴다.
+// CI에는 이 파일이 없고, 워크플로가 환경 변수로 넣어 준다.
+if (existsSync(".env.local")) process.loadEnvFile(".env.local");
 
 const PORT = 3000;
 const baseURL = `http://localhost:${PORT}`;
 
 export default defineConfig({
   testDir: "./e2e",
+  globalSetup: "./e2e/global-setup.ts",
   fullyParallel: true,
   forbidOnly: !!process.env.CI,
   retries: process.env.CI ? 2 : 0,
@@ -25,7 +32,7 @@ export default defineConfig({
     reuseExistingServer: !process.env.CI,
     timeout: 120_000,
     env: {
-      // .env.local이 없을 때 쓰는 자리표시자(로컬 Supabase 기본 주소). 실제 키가 아니다.
+      // 값이 없을 때 쓰는 자리표시자(로컬 Supabase 기본 주소). 실제 키가 아니다.
       NEXT_PUBLIC_SUPABASE_URL:
         process.env.NEXT_PUBLIC_SUPABASE_URL ?? "http://127.0.0.1:54321",
       NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY:

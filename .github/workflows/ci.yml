@@ -38,3 +38,54 @@ jobs:
         run: npm run test
       - name: Build (Next.js)
         run: npm run build
+
+  # 두 회원이 얽힌 진도 잠금 흐름을 실제 브라우저로 확인한다.
+  # 임시 로컬 Supabase(마이그레이션 적용, 이메일 확인 꺼짐)를 띄우고 테스트 계정을 만들어 쓴다.
+  e2e:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    env:
+      # 이 작업에서만 쓰고 버리는 로컬 DB용 값이다. 실제 계정이나 비밀값이 아니다.
+      E2E_CREATE_USERS: "1"
+      E2E_USER_A_EMAIL: leader@e2e.test
+      E2E_USER_A_PASSWORD: local-only-leader-pw
+      E2E_USER_B_EMAIL: member@e2e.test
+      E2E_USER_B_PASSWORD: local-only-member-pw
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - uses: supabase/setup-cli@v1
+        with:
+          version: latest
+      - name: Start local Supabase (applies supabase/migrations)
+        run: supabase start -x studio,imgproxy,storage-api,edge-runtime,logflare,vector,supavisor,mailpit
+      - name: Point the app at the local Supabase
+        run: |
+          supabase status -o env > "$RUNNER_TEMP/supabase.env"
+          echo "Variables from supabase status:"
+          cut -d= -f1 "$RUNNER_TEMP/supabase.env"
+          set -a
+          . "$RUNNER_TEMP/supabase.env"
+          set +a
+          KEY="${PUBLISHABLE_KEY:-${ANON_KEY:-}}"
+          if [ -z "${API_URL:-}" ] || [ -z "$KEY" ]; then
+            echo "::error::supabase status 출력에서 API_URL 또는 키를 찾지 못했다"
+            exit 1
+          fi
+          echo "NEXT_PUBLIC_SUPABASE_URL=$API_URL" >> "$GITHUB_ENV"
+          echo "NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY=$KEY" >> "$GITHUB_ENV"
+      - name: Install Playwright browser
+        run: npx playwright install --with-deps chromium
+      - name: E2E tests (Playwright)
+        run: npm run test:e2e
+      - name: Upload Playwright traces
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-results
+          path: test-results/
+          retention-days: 7
