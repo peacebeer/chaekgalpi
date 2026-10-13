@@ -4,14 +4,26 @@ import { notFound } from "next/navigation";
 import { Suspense } from "react";
 
 import { ExchangeSection } from "@/components/exchange/exchange-section";
+import { BookCover } from "@/components/groups/book-cover";
 import { ConfirmAction } from "@/components/groups/confirm-action";
+import {
+  chaptersFromJson,
+  GroupPreview,
+} from "@/components/groups/group-preview";
 import { InviteLink } from "@/components/groups/invite-link";
 import { JoinForm } from "@/components/groups/join-form";
 import { ProgressForm } from "@/components/groups/progress-form";
+import { ReadingPlan } from "@/components/groups/reading-plan";
 import { buttonVariants } from "@/components/ui/button";
 import { requireUser } from "@/lib/auth/session";
 import { isWholeBook } from "@/lib/books/chapters";
 import { overallPercent, positionLabel } from "@/lib/books/progress";
+import {
+  buildCalendar,
+  buildSchedule,
+  periodLabel,
+  todayInSeoul,
+} from "@/lib/books/schedule";
 import { createClient } from "@/lib/supabase/server";
 import { uuidSchema } from "@/lib/validation/common";
 
@@ -66,7 +78,7 @@ async function GroupDetail({
   const { data: group } = await supabase
     .from("groups")
     .select(
-      "id, name, capacity, start_date, target_date, is_public, invite_code, owner_id, books(title, author, translator, publisher, isbn, pages, source, book_chapters(number, title, start_page))",
+      "id, name, capacity, start_date, target_date, is_public, invite_code, owner_id, books(title, author, translator, publisher, isbn, pages, source, cover_url, book_chapters(number, title, start_page))",
     )
     .eq("id", groupId.data)
     .maybeSingle();
@@ -91,9 +103,21 @@ async function GroupDetail({
     title,
   }));
   const wholeBook = isWholeBook(chapters);
-  const period = [group.start_date, group.target_date].some(Boolean)
-    ? `${group.start_date ?? "시작일 미정"} ~ ${group.target_date ?? "완독일 미정"}`
-    : null;
+  const period = periodLabel(group.start_date, group.target_date);
+  // 읽는 기간이 정해져 있으면 오늘까지의 권장 진도를 계산한다(한국 날짜 기준).
+  const today = todayInSeoul();
+  const schedule = buildSchedule(
+    group.start_date,
+    group.target_date,
+    today,
+    book.pages,
+  );
+
+  // 회원이 아니면(공개 그룹) 입장 전 소개만 받아 온다. 리더 이름은 직접 조회할 수 없다.
+  const { data: previewRows } = me
+    ? { data: null }
+    : await supabase.rpc("group_preview", { p_group_id: group.id });
+  const preview = previewRows?.[0];
 
   const bookFacts = [
     ["제목", book.title],
@@ -105,13 +129,20 @@ async function GroupDetail({
     ["전체 쪽수", book.pages ? `${book.pages}쪽` : null],
     [
       "정보 출처",
-      book.source === "nlk" ? "국립중앙도서관" : "그룹 리더가 직접 입력",
+      book.source === "kakao"
+        ? "카카오 책 검색"
+        : book.source === "nlk"
+          ? "국립중앙도서관"
+          : "그룹 리더가 직접 입력",
     ],
   ] as const;
 
   const bookInfo = (
     <section className="flex flex-col gap-3">
       <h2 className="text-lg font-semibold">대표 도서</h2>
+      {book.cover_url && (
+        <BookCover url={book.cover_url} title={book.title} size="lg" />
+      )}
       <dl className="divide-y rounded-lg border text-sm">
         {bookFacts.map(([label, value]) => (
           <div key={label} className="flex gap-3 px-3 py-2">
@@ -171,13 +202,7 @@ async function GroupDetail({
       <div className="bg-card border-b">
         <div className="mx-auto flex w-full max-w-6xl flex-col gap-5 px-4 pt-6 sm:px-8">
           <header className="flex items-center gap-4">
-            {/* 책등 모양 장식 */}
-            <div
-              aria-hidden
-              className="bg-primary text-primary-foreground flex h-[4.5rem] w-14 shrink-0 items-end rounded-sm p-1.5 text-[0.625rem] leading-tight"
-            >
-              <span className="line-clamp-3">{book.title}</span>
-            </div>
+            <BookCover url={book.cover_url} title={book.title} size="md" />
             <div className="flex min-w-0 flex-col gap-0.5">
               <h1 className="text-2xl font-semibold tracking-tight">
                 {group.name}
@@ -225,18 +250,29 @@ async function GroupDetail({
           me && tab === "feed" ? "max-w-6xl" : "max-w-3xl"
         }`}
       >
-        {!me && (
-          <>
-            <section className="bg-card flex flex-col gap-3 rounded-xl border p-5">
-              <p className="text-sm">
-                공개 그룹이에요. 정원은 {group.capacity}명이고, 입장하면 회원과
-                감상을 볼 수 있어요.
-              </p>
-              <JoinForm groupId={group.id} />
-            </section>
-            {bookInfo}
-            {tableOfContents}
-          </>
+        {!me && preview && (
+          <GroupPreview
+            data={{
+              name: preview.name,
+              capacity: preview.capacity,
+              memberCount: preview.member_count,
+              startDate: preview.start_date,
+              targetDate: preview.target_date,
+              isPublic: preview.is_public,
+              leaderNickname: preview.leader_nickname,
+              book: {
+                title: preview.book_title,
+                author: preview.book_author,
+                translator: preview.book_translator,
+                publisher: preview.book_publisher,
+                pages: preview.book_pages,
+                coverUrl: preview.book_cover_url,
+              },
+              chapters: chaptersFromJson(preview.chapters),
+            }}
+          >
+            <JoinForm groupId={group.id} />
+          </GroupPreview>
         )}
 
         {me && (
@@ -262,6 +298,7 @@ async function GroupDetail({
                   finished: Boolean(member.finished_at),
                   isMe: member.user_id === user.id,
                 }))}
+                expectedPercent={schedule?.expectedPercent ?? null}
                 progressForm={
                   <ProgressForm
                     groupId={group.id}
@@ -282,10 +319,52 @@ async function GroupDetail({
 
             {tab === "progress" && (
               <section className="flex flex-col gap-3">
-                <h2 className="text-lg font-semibold">
+                <h2 className="text-lg font-semibold">읽는 기간</h2>
+                <ReadingPlan
+                  schedule={schedule}
+                  period={period}
+                  months={
+                    schedule && group.start_date && group.target_date
+                      ? buildCalendar(
+                          group.start_date,
+                          group.target_date,
+                          today,
+                        )
+                      : []
+                  }
+                  isOwner={isOwner}
+                />
+
+                <h2 className="pt-4 text-lg font-semibold">
                   진도 현황 · 회원 {memberList.length}/{group.capacity}명
                 </h2>
                 <ul className="flex flex-col gap-3">
+                  {schedule && (
+                    <li className="flex flex-col gap-1">
+                      <div className="flex items-baseline justify-between gap-3 text-sm">
+                        <span className="font-medium">오늘의 권장 진도</span>
+                        <span className="text-muted-foreground tabular-nums">
+                          {schedule.expectedPage !== null
+                            ? schedule.expectedPage + "쪽 · "
+                            : ""}
+                          {Math.round(schedule.expectedPercent)}%
+                        </span>
+                      </div>
+                      <div
+                        role="progressbar"
+                        aria-label="오늘의 권장 진도"
+                        aria-valuemin={0}
+                        aria-valuemax={100}
+                        aria-valuenow={Math.round(schedule.expectedPercent)}
+                        className="bg-muted h-2 overflow-hidden rounded-full"
+                      >
+                        <div
+                          className="bg-highlight-foreground h-full rounded-full"
+                          style={{ width: schedule.expectedPercent + "%" }}
+                        />
+                      </div>
+                    </li>
+                  )}
                   {memberList.map((member) => {
                     const position = {
                       chapter: member.progress_chapter,

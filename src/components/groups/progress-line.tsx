@@ -13,6 +13,8 @@ type ProgressLineProps = {
   members: LineMember[];
   chapterCount: number;
   wholeBook: boolean;
+  // 읽는 기간이 정해져 있을 때 오늘까지의 권장 진도(0~100)
+  expectedPercent?: number | null;
 };
 
 // 회원을 구분하는 점 색. 나는 항상 대표색(초록)이고, 다른 회원은 순서대로 받는다.
@@ -33,6 +35,7 @@ export function ProgressLine({
   members,
   chapterCount,
   wholeBook,
+  expectedPercent = null,
 }: ProgressLineProps) {
   let otherIndex = 0;
   const dots = members.map((member) => ({
@@ -66,6 +69,12 @@ export function ProgressLine({
               style={{ left: `${(tick / chapterCount) * 100}%` }}
             />
           ))}
+          {expectedPercent !== null && (
+            <span
+              className="bg-highlight-foreground absolute -top-1.5 h-5 w-0.5 -translate-x-1/2"
+              style={{ left: expectedPercent + "%" }}
+            />
+          )}
           {dots.map((dot) => (
             <span
               key={dot.id}
@@ -83,6 +92,20 @@ export function ProgressLine({
         </div>
       </div>
       <ul className="flex flex-col gap-1.5 text-sm">
+        {expectedPercent !== null && (
+          <li className="flex items-center justify-between gap-3">
+            <span className="flex items-center gap-2">
+              <span
+                className="bg-highlight-foreground mx-1 h-3 w-0.5 shrink-0"
+                aria-hidden
+              />
+              오늘의 권장 진도
+            </span>
+            <span className="text-muted-foreground shrink-0 tabular-nums">
+              {Math.round(expectedPercent)}%
+            </span>
+          </li>
+        )}
         {dots.map((dot) => (
           <li key={dot.id} className="flex items-center justify-between gap-3">
             <span className="flex min-w-0 items-center gap-2">

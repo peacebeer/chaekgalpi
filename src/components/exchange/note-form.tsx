@@ -13,6 +13,8 @@ type NoteFormProps = {
   target: { quoteId: string } | { parentId: string };
   label: string;
   placeholder: string;
+  // 카드의 주된 동작("이 문장에 감상 남기기")은 테두리 버튼, 보조 동작(답글)은 글자 버튼
+  variant?: "outline" | "ghost";
 };
 
 // 버튼을 누르면 펼쳐지는 짧은 글쓰기 칸(카드 감상, 답글)
@@ -21,6 +23,7 @@ export function NoteForm({
   target,
   label,
   placeholder,
+  variant = "ghost",
 }: NoteFormProps) {
   const [open, setOpen] = useState(false);
   const [state, formAction, pending] = useActionState(
@@ -36,7 +39,7 @@ export function NoteForm({
     return (
       <Button
         type="button"
-        variant="outline"
+        variant={variant}
         size="sm"
         onClick={() => setOpen(true)}
       >

@@ -14,6 +14,8 @@ type ConfirmActionProps = {
   question: string;
   confirmLabel: string;
   size?: "sm" | "default";
+  // 처음 보이는 버튼의 모양. 글 목록의 보조 버튼은 "ghost"로 맞춘다.
+  triggerVariant?: "outline" | "ghost";
 };
 
 // 되돌리기 어려운 동작(강퇴·탈퇴·삭제)을 두 번 눌러야 실행되게 한다.
@@ -24,6 +26,7 @@ export function ConfirmAction({
   question,
   confirmLabel,
   size = "sm",
+  triggerVariant = "outline",
 }: ConfirmActionProps) {
   const [state, formAction, pending] = useActionState(action, EMPTY_FORM_STATE);
   const [asking, setAsking] = useState(false);
@@ -32,7 +35,7 @@ export function ConfirmAction({
     return (
       <Button
         type="button"
-        variant="outline"
+        variant={triggerVariant}
         size={size}
         onClick={() => setAsking(true)}
       >

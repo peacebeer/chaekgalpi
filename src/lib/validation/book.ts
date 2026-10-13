@@ -72,7 +72,14 @@ export const bookSchema = z.object({
     .min(1, "전체 쪽수는 1 이상이어야 해요.")
     .nullish()
     .transform((value) => value ?? null),
-  source: z.enum(["nlk", "manual"]).default("manual"),
+  // 모르는 값이 오면 직접 입력으로 본다.
+  source: z.enum(["nlk", "kakao", "manual"]).catch("manual"),
+  // 표지 이미지 주소(서버가 허용한 주소만 넘긴다). 없으면 null
+  coverUrl: z
+    .string()
+    .max(500)
+    .nullish()
+    .transform((value) => value || null),
   chapters: bookChaptersSchema,
 });
 

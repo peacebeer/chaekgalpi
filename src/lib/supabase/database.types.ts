@@ -71,6 +71,7 @@ export type Database = {
       books: {
         Row: {
           author: string | null
+          cover_url: string | null
           created_at: string
           created_by: string | null
           id: string
@@ -83,6 +84,7 @@ export type Database = {
         }
         Insert: {
           author?: string | null
+          cover_url?: string | null
           created_at?: string
           created_by?: string | null
           id?: string
@@ -95,6 +97,7 @@ export type Database = {
         }
         Update: {
           author?: string | null
+          cover_url?: string | null
           created_at?: string
           created_by?: string | null
           id?: string
@@ -420,6 +423,27 @@ export type Database = {
           p_text: string
         }
         Returns: string
+      }
+      group_preview: {
+        Args: { p_group_id?: string; p_invite_code?: string }
+        Returns: {
+          book_author: string
+          book_cover_url: string
+          book_pages: number
+          book_publisher: string
+          book_title: string
+          book_translator: string
+          capacity: number
+          chapters: Json
+          id: string
+          is_member: boolean
+          is_public: boolean
+          leader_nickname: string
+          member_count: number
+          name: string
+          start_date: string
+          target_date: string
+        }[]
       }
       hide_note: {
         Args: { p_hidden?: boolean; p_note_id: string }

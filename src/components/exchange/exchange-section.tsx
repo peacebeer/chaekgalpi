@@ -8,6 +8,7 @@ import {
   updateNote,
   updateQuote,
 } from "@/app/groups/[id]/exchange-actions";
+import { CollapsibleNav } from "@/components/exchange/collapsible-nav";
 import { Composer } from "@/components/exchange/composer";
 import { EditForm } from "@/components/exchange/edit-form";
 import { NoteForm } from "@/components/exchange/note-form";
@@ -40,12 +41,18 @@ type ExchangeSectionProps = {
   progress: PickerProgress;
   // 진도선에 찍을 회원들(지금 그룹에 있는 회원만)
   members: LineMember[];
+  // 읽는 기간이 정해져 있을 때 오늘까지의 권장 진도(0~100)
+  expectedPercent: number | null;
   // "진도 기록" 버튼을 누르면 펼쳐질 입력 칸
   progressForm: ReactNode;
 };
 
 const FORMER_MEMBER = "나간 회원";
 const CARD = "bg-card rounded-xl border";
+// 수정·삭제·답글·숨기기 같은 보조 버튼 묶음: 오른쪽 가장자리에 붙이고,
+// 눌러서 펼쳐진 입력 칸은 한 줄을 다 쓰게 한다.
+const ACTIONS =
+  "ml-auto flex max-w-full flex-wrap items-start justify-end gap-1";
 
 // 이름 첫 글자를 넣은 동그라미
 function Avatar({ name, small = false }: { name: string; small?: boolean }) {
@@ -72,6 +79,7 @@ export async function ExchangeSection({
   wholeBook,
   progress,
   members,
+  expectedPercent,
   progressForm,
 }: ExchangeSectionProps) {
   const supabase = await createClient();
@@ -205,49 +213,53 @@ export async function ExchangeSection({
                 {note.likedBy.map((id) => nameOf(id)).join(", ")}
               </span>
             )}
-            {!isReply && (
-              <NoteForm
-                groupId={groupId}
-                target={{ parentId: note.id }}
-                label="답글"
-                placeholder="답글을 적어 주세요"
-              />
-            )}
-            {mine && (
-              <>
-                <EditForm
-                  action={updateNote}
-                  fields={{ noteId: note.id }}
-                  name="body"
-                  initial={note.body}
-                  label="수정"
+            {/* 좋아요를 뺀 버튼은 모양을 맞춰 오른쪽 가장자리에 모은다 */}
+            <div className={ACTIONS}>
+              {!isReply && (
+                <NoteForm
+                  groupId={groupId}
+                  target={{ parentId: note.id }}
+                  label="답글"
+                  placeholder="답글을 적어 주세요"
                 />
-                <ConfirmAction
-                  action={deleteNote}
-                  fields={{ noteId: note.id }}
-                  label="삭제"
-                  question={
-                    note.replies.length > 0
-                      ? `이 글을 지울까요? 달린 답글 ${note.replies.length}개도 함께 지워져요.`
-                      : "이 글을 지울까요? 되돌릴 수 없어요."
-                  }
-                  confirmLabel="삭제"
-                />
-              </>
-            )}
-            {isOwner && (
-              <form action={setNoteHidden}>
-                <input type="hidden" name="noteId" value={note.id} />
-                <input
-                  type="hidden"
-                  name="hidden"
-                  value={String(!note.hidden)}
-                />
-                <Button type="submit" size="sm" variant="ghost">
-                  {note.hidden ? "다시 보이기" : "숨기기"}
-                </Button>
-              </form>
-            )}
+              )}
+              {mine && (
+                <>
+                  <EditForm
+                    action={updateNote}
+                    fields={{ noteId: note.id }}
+                    name="body"
+                    initial={note.body}
+                    label="수정"
+                  />
+                  <ConfirmAction
+                    action={deleteNote}
+                    fields={{ noteId: note.id }}
+                    triggerVariant="ghost"
+                    label="삭제"
+                    question={
+                      note.replies.length > 0
+                        ? `이 글을 지울까요? 달린 답글 ${note.replies.length}개도 함께 지워져요.`
+                        : "이 글을 지울까요? 되돌릴 수 없어요."
+                    }
+                    confirmLabel="삭제"
+                  />
+                </>
+              )}
+              {isOwner && (
+                <form action={setNoteHidden}>
+                  <input type="hidden" name="noteId" value={note.id} />
+                  <input
+                    type="hidden"
+                    name="hidden"
+                    value={String(!note.hidden)}
+                  />
+                  <Button type="submit" size="sm" variant="ghost">
+                    {note.hidden ? "다시 보이기" : "숨기기"}
+                  </Button>
+                </form>
+              )}
+            </div>
           </div>
 
           {note.replies.length > 0 && (
@@ -308,7 +320,7 @@ export async function ExchangeSection({
             {thread.text}
           </blockquote>
           {(isCreator || isOwner) && (
-            <div className="flex flex-wrap items-start gap-2">
+            <div className={ACTIONS}>
               <EditForm
                 action={updateQuote}
                 fields={{ quoteId: thread.id }}
@@ -327,6 +339,7 @@ export async function ExchangeSection({
                 <ConfirmAction
                   action={deleteQuote}
                   fields={{ quoteId: thread.id }}
+                  triggerVariant="ghost"
                   label="카드 삭제"
                   question="이 인용 카드와 내 감상을 지울까요? 되돌릴 수 없어요."
                   confirmLabel="삭제"
@@ -336,6 +349,7 @@ export async function ExchangeSection({
                 <ConfirmAction
                   action={deleteQuote}
                   fields={{ quoteId: thread.id, asLeader: "true" }}
+                  triggerVariant="ghost"
                   label="카드 내리기 (리더)"
                   question={`이 인용 카드를 내릴까요? 카드에 달린 감상·답글 ${noteCount}개도 함께 지워지고 되돌릴 수 없어요.`}
                   confirmLabel="내리기"
@@ -352,6 +366,7 @@ export async function ExchangeSection({
             <NoteForm
               groupId={groupId}
               target={{ quoteId: thread.id }}
+              variant="outline"
               label="이 문장에 감상 남기기"
               placeholder="이 문장을 읽고 든 생각"
             />
@@ -372,6 +387,7 @@ export async function ExchangeSection({
             members={members}
             chapterCount={chapters.length}
             wholeBook={wholeBook}
+            expectedPercent={expectedPercent}
           />
           <ToolPanels
             panels={[
@@ -381,10 +397,11 @@ export async function ExchangeSection({
         </section>
 
         {!wholeBook && (
-          <nav aria-label="목차" className={`${CARD} flex flex-col gap-1 p-3`}>
-            <h2 className="text-muted-foreground px-2 py-1.5 text-sm font-semibold">
-              목차
-            </h2>
+          <CollapsibleNav
+            title="목차"
+            summary={`${chapters.length}개 장`}
+            className={`${CARD} flex flex-col gap-1 p-3`}
+          >
             {chapters.map((chapter) => {
               const open = threadsByChapter.get(chapter.number)?.length ?? 0;
               const lockedHere = lockedByChapter.get(chapter.number);
@@ -430,7 +447,7 @@ export async function ExchangeSection({
                 </div>
               );
             })}
-          </nav>
+          </CollapsibleNav>
         )}
       </aside>
 

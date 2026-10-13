@@ -11,8 +11,9 @@ import {
 } from "@/lib/books/chapters";
 import { toErrorMessage } from "@/lib/errors";
 import { fieldErrorsOf, textOf, type FormState } from "@/lib/form-state";
+import { hasKakaoKey, searchKakao } from "@/lib/kakao/client";
+import { safeCoverUrl } from "@/lib/kakao/parse";
 import { fetchNlkToc, searchNlk } from "@/lib/nlk/client";
-import type { NlkBook } from "@/lib/nlk/parse";
 import { createClient } from "@/lib/supabase/server";
 import { bookSchema, isbnSchema, type BookInput } from "@/lib/validation/book";
 import { uuidSchema } from "@/lib/validation/common";
@@ -21,29 +22,66 @@ import { groupDetailsSchema, inviteCodeSchema } from "@/lib/validation/group";
 type SupabaseServerClient = Awaited<ReturnType<typeof createClient>>;
 
 const SEARCH_FAILED =
-  "도서 검색에 연결하지 못했어요. 아래에 책 정보를 직접 입력해 주세요.";
+  "도서 검색에 연결하지 못했어요. 아래 버튼으로 책 정보를 직접 입력해 주세요.";
 
 const searchQuerySchema = z
   .string()
   .trim()
-  .min(1, "책 제목이나 ISBN을 입력해 주세요.")
+  .min(1, "책 제목, 저자, 출판사 또는 ISBN을 입력해 주세요.")
   .max(100, "검색어가 너무 길어요.");
 
-// 검색 목록에는 목차 글 전체를 싣지 않는다(있는지만 알린다).
-export type BookSearchItem = Omit<NlkBook, "tocText" | "tocUrl">;
+export type BookSearchItem = {
+  isbn: string;
+  title: string;
+  author: string;
+  translator: string;
+  publisher: string;
+  year: string;
+  coverUrl: string | null;
+};
 
 export type BookSearchResult =
-  { ok: true; books: BookSearchItem[] } | { ok: false; message: string };
+  | {
+      ok: true;
+      books: BookSearchItem[];
+      // 조건에 맞는 전체 건수. 알 수 없으면 null
+      total: number | null;
+      // 다음 쪽이 있으면 그 번호, 없으면 null
+      nextPage: number | null;
+    }
+  | { ok: false; message: string };
 
-// 국립중앙도서관 검색. 로그인한 사용자만 쓸 수 있다.
-export async function searchBooks(query: string): Promise<BookSearchResult> {
+// 책 검색. 카카오 책 검색(제목·저자·출판사·ISBN을 한 번에, 정확도순)을 쓰고,
+// 카카오를 쓸 수 없으면 국립중앙도서관 검색(제목·ISBN)으로 넘어간다. 로그인한 사용자만 쓸 수 있다.
+export async function searchBooks(
+  query: string,
+  page = 1,
+): Promise<BookSearchResult> {
   await requireUser("/groups/new");
 
   const parsed = searchQuerySchema.safeParse(query);
+  const parsedPage = z.number().int().min(1).max(50).safeParse(page);
   if (!parsed.success) {
     return { ok: false, message: parsed.error.issues[0].message };
   }
+  const pageNo = parsedPage.success ? parsedPage.data : 1;
 
+  if (hasKakaoKey()) {
+    try {
+      const result = await searchKakao(parsed.data, { page: pageNo });
+      return {
+        ok: true,
+        books: result.books,
+        total: result.total,
+        nextPage: result.isEnd ? null : pageNo + 1,
+      };
+    } catch {
+      // 아래 도서관 검색으로 넘어간다.
+    }
+  }
+
+  // 도서관 검색은 한 번에 20건만 가져오고 다음 쪽을 지원하지 않는다.
+  if (pageNo > 1) return { ok: true, books: [], total: null, nextPage: null };
   try {
     const books = await searchNlk(parsed.data);
     return {
@@ -54,10 +92,11 @@ export async function searchBooks(query: string): Promise<BookSearchResult> {
         author: book.author,
         translator: book.translator,
         publisher: book.publisher,
-        pages: book.pages,
         year: book.year,
-        hasToc: book.hasToc,
+        coverUrl: null,
       })),
+      total: null,
+      nextPage: null,
     };
   } catch {
     return { ok: false, message: SEARCH_FAILED };
@@ -71,7 +110,9 @@ export type PickedBook = {
   translator: string;
   publisher: string;
   pages: string;
+  coverUrl: string;
   chaptersText: string;
+  source: "nlk" | "kakao";
   // 이미 책갈피에 등록된 책이면 등록된 목차를 그대로 쓴다.
   existing: boolean;
 };
@@ -83,14 +124,15 @@ async function findUsableBook(supabase: SupabaseServerClient, isbn: string) {
   const { data } = await supabase
     .from("books")
     .select(
-      "id, isbn, title, author, translator, publisher, pages, created_by, book_chapters(number, title, start_page)",
+      "id, isbn, title, author, translator, publisher, pages, cover_url, source, created_by, book_chapters(number, title, start_page)",
     )
     .eq("isbn", isbn)
     .maybeSingle();
   return data;
 }
 
-// 검색 결과에서 고른 책의 정보와 목차를 불러온다. 주소는 서버가 다시 조회해서 얻는다.
+// 검색 결과에서 고른 책의 정보와 목차를 불러온다. 값은 서버가 ISBN으로 다시 조회해서 얻는다.
+// 책 정보와 표지는 카카오에서, 목차와 전체 쪽수는 국립중앙도서관에서 가져온다.
 export async function pickBook(isbn: string): Promise<PickBookResult> {
   await requireUser("/groups/new");
 
@@ -114,39 +156,53 @@ export async function pickBook(isbn: string): Promise<PickBookResult> {
         translator: saved.translator ?? "",
         publisher: saved.publisher ?? "",
         pages: saved.pages ? String(saved.pages) : "",
+        coverUrl: saved.cover_url ?? "",
         chaptersText: formatChapterLines(
           chapters.map((chapter) => ({
             title: chapter.title,
             startPage: chapter.start_page,
           })),
         ),
+        source: saved.source === "kakao" ? "kakao" : "nlk",
         existing: true,
       },
     };
   }
 
-  try {
-    const [found] = await searchNlk(parsed.data);
-    if (!found) return { ok: false, message: SEARCH_FAILED };
+  const [kakao, nlk] = await Promise.allSettled([
+    hasKakaoKey()
+      ? searchKakao(parsed.data, { isbnOnly: true })
+      : Promise.reject(new Error("no kakao key")),
+    searchNlk(parsed.data),
+  ]);
+  const fromKakao =
+    kakao.status === "fulfilled"
+      ? (kakao.value.books.find((book) => book.isbn === parsed.data) ??
+        kakao.value.books[0])
+      : undefined;
+  const fromNlk = nlk.status === "fulfilled" ? nlk.value[0] : undefined;
+  if (!fromKakao && !fromNlk) return { ok: false, message: SEARCH_FAILED };
 
-    // 응답에 목차 글이 있으면 그것을 쓰고, 없으면 목차 파일을 읽는다.
-    const toc = found.tocText ?? (await fetchNlkToc(found.tocUrl));
-    return {
-      ok: true,
-      book: {
-        isbn: found.isbn,
-        title: found.title,
-        author: found.author,
-        translator: found.translator,
-        publisher: found.publisher,
-        pages: found.pages ? String(found.pages) : "",
-        chaptersText: toc ? formatChapterLines(parseChapterLines(toc)) : "",
-        existing: false,
-      },
-    };
-  } catch {
-    return { ok: false, message: SEARCH_FAILED };
-  }
+  // 응답에 목차 글이 있으면 그것을 쓰고, 없으면 목차 파일을 읽는다.
+  const toc = fromNlk
+    ? (fromNlk.tocText ?? (await fetchNlkToc(fromNlk.tocUrl)))
+    : null;
+
+  return {
+    ok: true,
+    book: {
+      isbn: parsed.data,
+      title: fromKakao?.title ?? fromNlk?.title ?? "",
+      author: fromKakao?.author || fromNlk?.author || "",
+      translator: fromKakao?.translator || fromNlk?.translator || "",
+      publisher: fromKakao?.publisher || fromNlk?.publisher || "",
+      pages: fromNlk?.pages ? String(fromNlk.pages) : "",
+      coverUrl: fromKakao?.coverUrl ?? "",
+      chaptersText: toc ? formatChapterLines(parseChapterLines(toc)) : "",
+      source: fromKakao ? "kakao" : "nlk",
+      existing: false,
+    },
+  };
 }
 
 // 같은 ISBN의 책이 이미 등록돼 있을 때: 등록된 목차를 그대로 쓸지, 내 목차로 따로 등록할지
@@ -193,6 +249,7 @@ async function resolveBookId(
         publisher: book.publisher,
         pages: book.pages,
         source: book.source,
+        cover_url: book.coverUrl,
       })
       .select("id")
       .single();
@@ -232,7 +289,9 @@ export async function createGroup(
     translator: textOf(formData, "translator"),
     publisher: textOf(formData, "publisher"),
     pages: pageCount,
-    source: textOf(formData, "source") === "nlk" ? "nlk" : "manual",
+    source: textOf(formData, "source"),
+    // 카카오 이미지 서버의 주소가 아니면 버린다.
+    coverUrl: safeCoverUrl(textOf(formData, "coverUrl")),
     chapters: noChapters
       ? wholeBookChapters(
           Number.isInteger(pageCount) && Number(pageCount) > 0
