@@ -9,6 +9,7 @@ import {
   type BookSearchResult,
 } from "@/app/groups/actions";
 import { Field } from "@/components/auth/field";
+import { BookCover } from "@/components/groups/book-cover";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -24,6 +25,7 @@ const EMPTY_BOOK = {
   translator: "",
   publisher: "",
   pages: "",
+  coverUrl: "",
   chapters: "",
 };
 
@@ -56,7 +58,7 @@ export function NewGroupForm() {
   // 검색 결과로 채우거나 단계를 오가도 입력을 지키기 위해 모든 칸을 직접 관리한다.
   const [book, setBook] = useState(EMPTY_BOOK);
   const [group, setGroup] = useState(INITIAL_GROUP);
-  const [source, setSource] = useState<"nlk" | "manual">("manual");
+  const [source, setSource] = useState<"nlk" | "kakao" | "manual">("manual");
   // 같은 ISBN의 책이 이미 등록돼 있을 때의 선택. ""는 해당 없음 또는 아직 고르지 않음
   const [choice, setChoice] = useState<"" | "reuse" | "own">("");
 
@@ -110,6 +112,25 @@ export function NewGroupForm() {
     });
   }
 
+  // 다음 쪽을 가져와 지금 목록 뒤에 붙인다.
+  function loadMore() {
+    if (!search?.ok || !search.nextPage) return;
+    const shown = search.books;
+    const page = search.nextPage;
+    startSearch(async () => {
+      const more = await searchBooks(query, page);
+      if (!more.ok) {
+        setPickError(more.message);
+        return;
+      }
+      const seen = new Set(shown.map((item) => item.isbn));
+      setSearch({
+        ...more,
+        books: [...shown, ...more.books.filter((item) => !seen.has(item.isbn))],
+      });
+    });
+  }
+
   function choose(isbn: string) {
     setPickError(null);
     startSearch(async () => {
@@ -118,9 +139,14 @@ export function NewGroupForm() {
         setPickError(result.message);
         return;
       }
-      const { chaptersText, existing: saved, ...fields } = result.book;
+      const {
+        chaptersText,
+        existing: saved,
+        source: pickedFrom,
+        ...fields
+      } = result.book;
       setBook({ ...fields, chapters: chaptersText });
-      setSource("nlk");
+      setSource(pickedFrom);
       setChoice(saved ? "reuse" : "");
       setSearch(null);
       setTitleMissing(false);
@@ -171,7 +197,7 @@ export function NewGroupForm() {
               aria-current={current ? "step" : undefined}
               className={
                 current
-                  ? "bg-foreground text-background rounded-full px-3 py-1"
+                  ? "bg-primary text-primary-foreground rounded-full px-3 py-1"
                   : "text-muted-foreground bg-muted rounded-full px-3 py-1"
               }
             >
@@ -186,8 +212,8 @@ export function NewGroupForm() {
           <h2 className="text-lg font-semibold">1. 함께 읽을 책 찾기</h2>
           <div className="flex gap-2">
             <Input
-              aria-label="책 제목 또는 ISBN"
-              placeholder="책 제목 또는 ISBN"
+              aria-label="책 제목, 저자, 출판사 또는 ISBN"
+              placeholder="책 제목, 저자, 출판사 또는 ISBN"
               value={query}
               onChange={(event) => setQuery(event.target.value)}
               onKeyDown={(event) => {
@@ -207,7 +233,8 @@ export function NewGroupForm() {
             </Button>
           </div>
           <p className="text-muted-foreground text-sm">
-            국립중앙도서관 자료에서 찾아요. 책을 고르면 다음 단계로 넘어가요.
+            제목, 저자, 출판사 어느 것으로든 찾을 수 있어요. 책을 고르면 다음
+            단계로 넘어가요.
           </p>
 
           {search && !search.ok && (
@@ -221,26 +248,58 @@ export function NewGroupForm() {
             </p>
           )}
           {search?.ok && search.books.length > 0 && (
-            <ul className="divide-y rounded-lg border">
-              {search.books.map((found) => (
-                <li key={found.isbn}>
-                  <button
-                    type="button"
-                    className="hover:bg-muted flex w-full flex-col gap-0.5 px-3 py-2 text-left"
-                    onClick={() => choose(found.isbn)}
-                    disabled={searching}
-                  >
-                    <span className="font-medium">{found.title}</span>
-                    <span className="text-muted-foreground text-sm">
-                      {[found.author, found.publisher, found.year]
-                        .filter(Boolean)
-                        .join(" · ")}
-                      {found.hasToc ? " · 목차 있음" : ""}
-                    </span>
-                  </button>
-                </li>
-              ))}
-            </ul>
+            <div className="flex flex-col gap-2">
+              <p className="text-muted-foreground text-sm" role="status">
+                {search.total !== null
+                  ? `검색 결과 ${search.total.toLocaleString("ko-KR")}건 중 ${search.books.length}건`
+                  : `검색 결과 ${search.books.length}건`}
+              </p>
+              {/* 결과가 길어도 화면이 끝없이 늘어나지 않게 이 칸 안에서 스크롤한다 */}
+              <ul
+                aria-label="검색 결과"
+                className="bg-card max-h-[28rem] divide-y overflow-y-auto rounded-lg border"
+              >
+                {search.books.map((found) => (
+                  <li key={found.isbn}>
+                    <button
+                      type="button"
+                      className="hover:bg-accent flex w-full items-center gap-3 px-3 py-2 text-left"
+                      onClick={() => choose(found.isbn)}
+                      disabled={searching}
+                    >
+                      <BookCover
+                        url={found.coverUrl}
+                        title={found.title}
+                        size="sm"
+                      />
+                      <span className="flex min-w-0 flex-col gap-0.5">
+                        <span className="font-medium">{found.title}</span>
+                        <span className="text-muted-foreground text-sm">
+                          {[
+                            found.author,
+                            found.translator && `${found.translator} 옮김`,
+                            found.publisher,
+                            found.year,
+                          ]
+                            .filter(Boolean)
+                            .join(" · ")}
+                        </span>
+                      </span>
+                    </button>
+                  </li>
+                ))}
+              </ul>
+              {search.nextPage && (
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={loadMore}
+                  disabled={searching}
+                >
+                  {searching ? "불러오는 중…" : "더 보기"}
+                </Button>
+              )}
+            </div>
           )}
           {pickError && (
             <p role="alert" className="text-destructive text-sm">
@@ -274,6 +333,7 @@ export function NewGroupForm() {
       >
         <input type="hidden" name="source" value={source} />
         <input type="hidden" name="bookChoice" value={choice} />
+        <input type="hidden" name="coverUrl" value={book.coverUrl} />
 
         <section hidden={step !== 2} className="flex flex-col gap-4">
           <h2 className="text-lg font-semibold">2. 책 정보와 목차</h2>
@@ -370,7 +430,7 @@ export function NewGroupForm() {
             inputMode="numeric"
             value={book.isbn}
             onChange={(event) => editBook("isbn", event.target.value)}
-            readOnly={existing || source === "nlk"}
+            readOnly={existing || source !== "manual"}
             error={errors.isbn}
             hint="책 뒤표지 바코드 아래의 13자리 숫자예요."
           />

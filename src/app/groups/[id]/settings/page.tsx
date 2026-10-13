@@ -17,7 +17,7 @@ export default function GroupSettingsPage({
   params,
 }: PageProps<"/groups/[id]/settings">) {
   return (
-    <main className="mx-auto flex w-full max-w-xl flex-1 flex-col gap-8 px-6 py-10">
+    <main className="mx-auto flex w-full max-w-3xl flex-1 flex-col gap-8 px-4 py-8 sm:px-8">
       <Suspense
         fallback={<p className="text-muted-foreground text-sm">불러오는 중…</p>}
       >
@@ -86,13 +86,13 @@ async function Settings({
         <h2 className="text-lg font-semibold">
           회원 {memberList.length}/{group.capacity}명
         </h2>
-        <ul className="divide-y rounded-lg border">
+        <ul className="bg-card divide-y rounded-xl border">
           {memberList.map((member) => {
             const nickname = member.profiles?.nickname ?? "독자";
             return (
               <li
                 key={member.user_id}
-                className="flex items-start justify-between gap-3 px-3 py-2 text-sm"
+                className="flex flex-wrap items-start justify-between gap-x-3 px-3 py-2 text-sm"
               >
                 <span className="py-1">
                   {nickname}

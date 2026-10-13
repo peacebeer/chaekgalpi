@@ -1,13 +1,24 @@
 import type { Metadata } from "next";
-import { Geist, Geist_Mono } from "next/font/google";
+import { Geist_Mono, IBM_Plex_Sans_KR, Nanum_Myeongjo } from "next/font/google";
 import "./globals.css";
 
 import { SiteHeader } from "@/components/site-header";
 
-// globals.css의 @theme이 --font-sans / --font-geist-mono를 읽는다.
-const geistSans = Geist({
+// globals.css의 @theme이 --font-sans / --font-quote-family / --font-geist-mono를 읽는다.
+// 한글 글꼴은 글자 묶음별로 나눠 필요한 부분만 내려받는다(미리 불러오지 않는다).
+const bodyFont = IBM_Plex_Sans_KR({
   variable: "--font-sans",
+  weight: ["400", "500", "600"],
   subsets: ["latin"],
+  preload: false,
+});
+
+// 인용문에 쓰는 명조체
+const quoteFont = Nanum_Myeongjo({
+  variable: "--font-quote-family",
+  weight: ["400", "700"],
+  subsets: ["latin"],
+  preload: false,
 });
 
 const geistMono = Geist_Mono({
@@ -25,7 +36,7 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
   return (
     <html
       lang="ko"
-      className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
+      className={`${bodyFont.variable} ${quoteFont.variable} ${geistMono.variable} h-full antialiased`}
     >
       <body className="flex min-h-full flex-col">
         <SiteHeader />

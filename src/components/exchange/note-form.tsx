@@ -1,8 +1,9 @@
 "use client";
 
-import { useActionState, useState } from "react";
+import { useActionState } from "react";
 
 import { addNote } from "@/app/groups/[id]/exchange-actions";
+import { usePanel } from "@/components/action-group";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { EMPTY_FORM_STATE, type FormState } from "@/lib/form-state";
@@ -13,16 +14,20 @@ type NoteFormProps = {
   target: { quoteId: string } | { parentId: string };
   label: string;
   placeholder: string;
+  // 카드의 주된 동작("이 문장에 감상 남기기")은 테두리 버튼, 보조 동작(답글)은 글자 버튼
+  variant?: "outline" | "ghost";
 };
 
-// 버튼을 누르면 펼쳐지는 짧은 글쓰기 칸(카드 감상, 답글)
+// 버튼을 누르면 버튼 줄 아래에 펼쳐지는 짧은 글쓰기 칸(카드 감상, 답글).
+// 버튼은 제자리에 두어 옆 버튼들이 밀리지 않게 한다.
 export function NoteForm({
   groupId,
   target,
   label,
   placeholder,
+  variant = "ghost",
 }: NoteFormProps) {
-  const [open, setOpen] = useState(false);
+  const [open, setOpen] = usePanel();
   const [state, formAction, pending] = useActionState(
     async (prev: FormState, formData: FormData) => {
       const result = await addNote(prev, formData);
@@ -32,53 +37,58 @@ export function NoteForm({
     EMPTY_FORM_STATE,
   );
 
-  if (!open) {
-    return (
+  return (
+    <>
       <Button
         type="button"
-        variant="outline"
+        variant={open ? "secondary" : variant}
         size="sm"
-        onClick={() => setOpen(true)}
+        aria-expanded={open}
+        onClick={() => setOpen(!open)}
       >
         {label}
       </Button>
-    );
-  }
-
-  return (
-    <form action={formAction} className="flex w-full flex-col gap-2">
-      <input type="hidden" name="groupId" value={groupId} />
-      {"quoteId" in target ? (
-        <input type="hidden" name="quoteId" value={target.quoteId} />
-      ) : (
-        <input type="hidden" name="parentId" value={target.parentId} />
-      )}
-      <Textarea
-        name="body"
-        rows={2}
-        aria-label={label}
-        placeholder={placeholder}
-        autoFocus
-      />
-      {(state.error ?? state.fieldErrors?.body) && (
-        <p role="alert" className="text-destructive text-sm">
-          {state.error ?? state.fieldErrors?.body}
-        </p>
-      )}
-      <div className="flex gap-2">
-        <Button type="submit" size="sm" disabled={pending}>
-          {pending ? "등록하는 중…" : "등록"}
-        </Button>
-        <Button
-          type="button"
-          variant="ghost"
-          size="sm"
-          onClick={() => setOpen(false)}
-          disabled={pending}
+      {open && (
+        <form
+          action={formAction}
+          data-open
+          className="order-last mt-2 flex w-full basis-full flex-col gap-2 text-left"
         >
-          취소
-        </Button>
-      </div>
-    </form>
+          <input type="hidden" name="groupId" value={groupId} />
+          {"quoteId" in target ? (
+            <input type="hidden" name="quoteId" value={target.quoteId} />
+          ) : (
+            <input type="hidden" name="parentId" value={target.parentId} />
+          )}
+          <Textarea
+            name="body"
+            rows={4}
+            aria-label={label}
+            placeholder={placeholder}
+            className="bg-card min-h-28"
+            autoFocus
+          />
+          {(state.error ?? state.fieldErrors?.body) && (
+            <p role="alert" className="text-destructive text-sm">
+              {state.error ?? state.fieldErrors?.body}
+            </p>
+          )}
+          <div className="flex justify-end gap-2">
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              onClick={() => setOpen(false)}
+              disabled={pending}
+            >
+              취소
+            </Button>
+            <Button type="submit" size="sm" disabled={pending}>
+              {pending ? "등록하는 중…" : "등록"}
+            </Button>
+          </div>
+        </form>
+      )}
+    </>
   );
 }

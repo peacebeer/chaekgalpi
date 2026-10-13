@@ -30,7 +30,7 @@ async function setSlider(slider: Locator, value: number) {
 async function saveProgress(page: Page, chapter: string, pct: number) {
   const panel = page.locator("#tool-progress");
   if (!(await panel.isVisible())) {
-    await page.getByRole("button", { name: /^내 진도/ }).click();
+    await page.getByRole("button", { name: "내 진도 기록" }).click();
   }
   await panel.getByLabel("읽고 있는 장").selectOption(chapter);
   await setSlider(panel.locator('input[type="range"]'), pct);
