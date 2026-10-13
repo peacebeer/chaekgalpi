@@ -446,6 +446,14 @@ export type Database = {
           pct: number
         }[]
       }
+      quote_usage: {
+        Args: { p_group_id: string }
+        Returns: {
+          quote_limit: number
+          used: number
+        }[]
+      }
+      remove_quote: { Args: { p_quote_id: string }; Returns: undefined }
       shares_group: { Args: { p_user_id: string }; Returns: boolean }
       similar_quotes: {
         Args: {

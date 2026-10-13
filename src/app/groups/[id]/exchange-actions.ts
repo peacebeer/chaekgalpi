@@ -8,6 +8,7 @@ import { fieldErrorsOf, textOf, type FormState } from "@/lib/form-state";
 import { createClient } from "@/lib/supabase/server";
 import { uuidSchema } from "@/lib/validation/common";
 import {
+  noteBodySchema,
   positionNoteSchema,
   quoteNoteSchema,
   replySchema,
@@ -200,4 +201,102 @@ export async function setNoteHidden(formData: FormData): Promise<void> {
   });
 
   refresh();
+}
+
+// 내가 쓴 감상·메모·답글 고치기. RLS가 작성자 본인 것만 바꾸게 한다.
+export async function updateNote(
+  _prev: FormState,
+  formData: FormData,
+): Promise<FormState> {
+  const noteId = uuidSchema.safeParse(textOf(formData, "noteId"));
+  const body = noteBodySchema.safeParse(textOf(formData, "body"));
+  if (!noteId.success) return { error: toErrorMessage("note_parent_invalid") };
+  if (!body.success) return { error: body.error.issues[0].message };
+  await requireUser("/groups");
+
+  const supabase = await createClient();
+  const { error, count } = await supabase
+    .from("notes")
+    .update({ body: body.data }, { count: "exact" })
+    .eq("id", noteId.data);
+  if (error) return { error: toErrorMessage(error) };
+  if (!count) return { error: toErrorMessage("42501") };
+
+  refresh();
+  return { notice: "고쳤어요." };
+}
+
+// 내가 쓴 글 지우기. 달린 답글도 함께 지워진다.
+export async function deleteNote(
+  _prev: FormState,
+  formData: FormData,
+): Promise<FormState> {
+  const noteId = uuidSchema.safeParse(textOf(formData, "noteId"));
+  if (!noteId.success) return { error: toErrorMessage("note_parent_invalid") };
+  await requireUser("/groups");
+
+  const supabase = await createClient();
+  const { error, count } = await supabase
+    .from("notes")
+    .delete({ count: "exact" })
+    .eq("id", noteId.data);
+  if (error) return { error: toErrorMessage(error) };
+  if (!count) return { error: toErrorMessage("42501") };
+
+  refresh();
+  return {};
+}
+
+// 인용문 고치기. 등록자는 잠기기 전에는 자유롭게, 잠긴 뒤와 리더는 오타 수정(10자 이내)만.
+// 그 판정은 DB 트리거가 한다.
+export async function updateQuote(
+  _prev: FormState,
+  formData: FormData,
+): Promise<FormState> {
+  const quoteId = uuidSchema.safeParse(textOf(formData, "quoteId"));
+  const text = quoteTextSchema.safeParse(textOf(formData, "text"));
+  if (!quoteId.success) return { error: toErrorMessage("note_quote_invalid") };
+  if (!text.success) return { error: text.error.issues[0].message };
+  await requireUser("/groups");
+
+  const supabase = await createClient();
+  const { error, count } = await supabase
+    .from("quotes")
+    .update({ text: text.data }, { count: "exact" })
+    .eq("id", quoteId.data);
+  if (error) return { error: toErrorMessage(error) };
+  if (!count) return { error: toErrorMessage("42501") };
+
+  refresh();
+  return { notice: "고쳤어요." };
+}
+
+// 인용 카드 지우기. 달린 감상과 답글도 함께 지워진다.
+// - 등록자: 다른 회원의 감상이 달리기 전에만 (RLS)
+// - 리더: 언제든 내릴 수 있다 (remove_quote)
+export async function deleteQuote(
+  _prev: FormState,
+  formData: FormData,
+): Promise<FormState> {
+  const quoteId = uuidSchema.safeParse(textOf(formData, "quoteId"));
+  if (!quoteId.success) return { error: toErrorMessage("note_quote_invalid") };
+  await requireUser("/groups");
+
+  const supabase = await createClient();
+  if (textOf(formData, "asLeader") === "true") {
+    const { error } = await supabase.rpc("remove_quote", {
+      p_quote_id: quoteId.data,
+    });
+    if (error) return { error: toErrorMessage(error) };
+  } else {
+    const { error, count } = await supabase
+      .from("quotes")
+      .delete({ count: "exact" })
+      .eq("id", quoteId.data);
+    if (error) return { error: toErrorMessage(error) };
+    if (!count) return { error: toErrorMessage("quote_locked") };
+  }
+
+  refresh();
+  return {};
 }

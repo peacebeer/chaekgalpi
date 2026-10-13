@@ -7,6 +7,8 @@ export type QuoteRow = {
   pct: number;
   text: string;
   createdBy: string | null;
+  // 다른 회원의 감상이 달려 잠긴 카드(등록자는 오타 수정만 가능)
+  locked: boolean;
   createdAt: string;
 };
 
@@ -39,6 +41,7 @@ export type FeedThread =
       pct: number;
       text: string;
       createdBy: string | null;
+      locked: boolean;
       createdAt: string;
       // 카드에 달린 감상(답글은 각 감상 안에)
       notes: FeedNote[];
@@ -106,6 +109,7 @@ export function buildFeed(quotes: QuoteRow[], notes: NoteRow[]): FeedSection[] {
       pct: quote.pct,
       text: quote.text,
       createdBy: quote.createdBy,
+      locked: quote.locked,
       createdAt: quote.createdAt,
       notes: topLevel
         .filter(({ row }) => row.quoteId === quote.id)

@@ -13,6 +13,7 @@ const quote = (over: Partial<QuoteRow> & { id: string }): QuoteRow => ({
   pct: 10,
   text: "인용문",
   createdBy: "u1",
+  locked: false,
   createdAt: "2026-10-13T00:00:00Z",
   ...over,
 });

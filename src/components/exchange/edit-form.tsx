@@ -1,0 +1,86 @@
+"use client";
+
+import { useActionState, useState } from "react";
+
+import { Button } from "@/components/ui/button";
+import { Textarea } from "@/components/ui/textarea";
+import { EMPTY_FORM_STATE, type FormState } from "@/lib/form-state";
+
+type EditFormProps = {
+  action: (prev: FormState, formData: FormData) => Promise<FormState>;
+  // 함께 보낼 숨은 값(예: noteId, quoteId)
+  fields: Record<string, string>;
+  // 고칠 글이 실리는 이름("body" 또는 "text")
+  name: string;
+  initial: string;
+  label: string;
+  hint?: string;
+};
+
+// "수정"을 누르면 그 자리에서 펼쳐지는 고치기 칸
+export function EditForm({
+  action,
+  fields,
+  name,
+  initial,
+  label,
+  hint,
+}: EditFormProps) {
+  const [open, setOpen] = useState(false);
+  const [state, formAction, pending] = useActionState(
+    async (prev: FormState, formData: FormData) => {
+      const result = await action(prev, formData);
+      if (result.notice) setOpen(false);
+      return result;
+    },
+    EMPTY_FORM_STATE,
+  );
+
+  if (!open) {
+    return (
+      <Button
+        type="button"
+        variant="ghost"
+        size="sm"
+        onClick={() => setOpen(true)}
+      >
+        {label}
+      </Button>
+    );
+  }
+
+  return (
+    <form action={formAction} className="flex w-full flex-col gap-2">
+      {Object.entries(fields).map(([key, value]) => (
+        <input key={key} type="hidden" name={key} value={value} />
+      ))}
+      <Textarea
+        name={name}
+        rows={3}
+        aria-label={label}
+        defaultValue={initial}
+        autoFocus
+      />
+      {hint && <p className="text-muted-foreground text-sm">{hint}</p>}
+      {state.error && (
+        <p role="alert" className="text-destructive text-sm">
+          {state.error}
+        </p>
+      )}
+      <div className="flex gap-2">
+        <Button type="submit" size="sm" disabled={pending}>
+          {pending ? "저장하는 중…" : "저장"}
+        </Button>
+        <Button
+          type="button"
+          variant="ghost"
+          size="sm"
+          onClick={() => setOpen(false)}
+          disabled={pending}
+        >
+          취소
+        </Button>
+      </div>
+    </form>
+  );
+}

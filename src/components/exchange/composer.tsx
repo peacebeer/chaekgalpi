@@ -20,6 +20,7 @@ import { positionLabel } from "@/lib/books/progress";
 import { KIND_LABELS } from "@/lib/exchange/feed";
 import { EMPTY_FORM_STATE, type FormState } from "@/lib/form-state";
 import { charLength } from "@/lib/validation/common";
+import { remainingQuoteChars } from "@/lib/validation/quote";
 import { LIMITS } from "@/lib/validation/limits";
 
 type ComposerProps = {
@@ -27,6 +28,8 @@ type ComposerProps = {
   chapters: { number: number; title: string }[];
   wholeBook: boolean;
   progress: PickerProgress;
+  // 그룹 인용 한도 사용량(아직 못 읽은 카드 포함). 불러오지 못했으면 null
+  quota?: { used: number; limit: number } | null;
 };
 
 type Mode = "quote" | "note";
@@ -40,6 +43,7 @@ export function Composer({
   chapters,
   wholeBook,
   progress,
+  quota = null,
 }: ComposerProps) {
   const [mode, setMode] = useState<Mode>("quote");
   const [position, setPosition] = useState({
@@ -69,6 +73,8 @@ export function Composer({
   );
   const errors = state.fieldErrors ?? {};
   const textLength = charLength(text.trim());
+  const quotaLeft = quota ? remainingQuoteChars(quota.used, quota.limit) : null;
+  const overQuota = quotaLeft !== null && textLength > quotaLeft;
 
   // 인용을 입력하는 동안 같은 장의 비슷한 카드를 찾아 중복 등록을 줄인다.
   useEffect(() => {
@@ -156,6 +162,20 @@ export function Composer({
             {textLength}/{LIMITS.quoteTextMax}자 · 출처(책·장)는 자동으로
             표시돼요.
           </p>
+          {quota && quotaLeft !== null && (
+            <p
+              className={
+                overQuota
+                  ? "text-destructive text-sm"
+                  : "text-muted-foreground text-sm"
+              }
+            >
+              그룹 인용 한도: {quota.used.toLocaleString("ko-KR")} /{" "}
+              {quota.limit.toLocaleString("ko-KR")}자 사용 · 남은{" "}
+              {quotaLeft.toLocaleString("ko-KR")}자
+              {overQuota ? " · 이 인용문은 남은 한도를 넘어요." : ""}
+            </p>
+          )}
           {errors.text && (
             <p role="alert" className="text-destructive text-sm">
               {errors.text}

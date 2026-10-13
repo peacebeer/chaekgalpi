@@ -1,9 +1,15 @@
+import { cookies } from "next/headers";
 import Link from "next/link";
 import { Suspense } from "react";
 
 import { logout } from "@/app/(auth)/actions";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { getCurrentUser } from "@/lib/auth/session";
+import {
+  countUnseen,
+  getNotifications,
+  SEEN_COOKIE,
+} from "@/lib/notifications";
 import { createClient } from "@/lib/supabase/server";
 
 export function SiteHeader() {
@@ -37,11 +43,19 @@ async function UserMenu() {
   }
 
   const supabase = await createClient();
-  const { data: profile } = await supabase
-    .from("profiles")
-    .select("nickname")
-    .eq("id", user.id)
-    .maybeSingle();
+  const [{ data: profile }, notifications, cookieStore] = await Promise.all([
+    supabase
+      .from("profiles")
+      .select("nickname")
+      .eq("id", user.id)
+      .maybeSingle(),
+    getNotifications(supabase, user.id),
+    cookies(),
+  ]);
+  const unseen = countUnseen(
+    notifications,
+    cookieStore.get(SEEN_COOKIE)?.value ?? null,
+  );
 
   return (
     <nav className="flex items-center gap-1">
@@ -50,6 +64,18 @@ async function UserMenu() {
         className={buttonVariants({ variant: "ghost", size: "sm" })}
       >
         그룹
+      </Link>
+      <Link
+        href="/notifications"
+        className={buttonVariants({ variant: "ghost", size: "sm" })}
+        aria-label={unseen > 0 ? `알림, 새 소식 ${unseen}개` : "알림"}
+      >
+        알림
+        {unseen > 0 && (
+          <span className="bg-foreground text-background rounded-full px-1.5 text-xs font-medium tabular-nums">
+            {unseen}
+          </span>
+        )}
       </Link>
       <Link
         href="/profile"
