@@ -23,6 +23,7 @@ export const metadata: Metadata = { title: "그룹 · 책갈피" };
 const TABS = [
   ["feed", "인용과 감상"],
   ["progress", "진도 현황"],
+  ["book", "책 정보"],
   ["info", "그룹 정보"],
 ] as const;
 type Tab = (typeof TABS)[number][0];
@@ -61,7 +62,7 @@ async function GroupDetail({
   const { data: group } = await supabase
     .from("groups")
     .select(
-      "id, name, capacity, start_date, target_date, is_public, invite_code, owner_id, books(title, author, translator, publisher, book_chapters(number, title, start_page))",
+      "id, name, capacity, start_date, target_date, is_public, invite_code, owner_id, books(title, author, translator, publisher, isbn, pages, source, book_chapters(number, title, start_page))",
     )
     .eq("id", groupId.data)
     .maybeSingle();
@@ -89,6 +90,38 @@ async function GroupDetail({
   const period = [group.start_date, group.target_date].some(Boolean)
     ? `${group.start_date ?? "시작일 미정"} ~ ${group.target_date ?? "완독일 미정"}`
     : null;
+
+  const bookFacts = [
+    ["제목", book.title],
+    ["저자", book.author],
+    ["역자", book.translator],
+    ["출판사", book.publisher],
+    // ISBN은 판본마다 달라서, 어떤 판을 기준으로 삼았는지 알려 준다.
+    ["판본 (ISBN)", book.isbn],
+    ["전체 쪽수", book.pages ? `${book.pages}쪽` : null],
+    [
+      "정보 출처",
+      book.source === "nlk" ? "국립중앙도서관" : "그룹 리더가 직접 입력",
+    ],
+  ] as const;
+
+  const bookInfo = (
+    <section className="flex flex-col gap-3">
+      <h2 className="text-lg font-semibold">대표 도서</h2>
+      <dl className="divide-y rounded-lg border text-sm">
+        {bookFacts.map(([label, value]) => (
+          <div key={label} className="flex gap-3 px-3 py-2">
+            <dt className="text-muted-foreground w-24 shrink-0">{label}</dt>
+            <dd>{value || "정보 없음"}</dd>
+          </div>
+        ))}
+      </dl>
+      <p className="text-muted-foreground text-sm">
+        그룹의 위치 기준이 되는 책이에요. 다른 판본이나 번역본을 읽어도 참여할
+        수 있어요.
+      </p>
+    </section>
+  );
 
   const tableOfContents = (
     <section className="flex flex-col gap-3">
@@ -132,19 +165,7 @@ async function GroupDetail({
   return (
     <>
       <header className="flex flex-col gap-1">
-        <div className="flex items-start justify-between gap-3">
-          <h1 className="text-2xl font-semibold tracking-tight">
-            {group.name}
-          </h1>
-          {isOwner && (
-            <Link
-              href={`/groups/${group.id}/settings`}
-              className={buttonVariants({ variant: "outline", size: "sm" })}
-            >
-              그룹 설정
-            </Link>
-          )}
-        </div>
+        <h1 className="text-2xl font-semibold tracking-tight">{group.name}</h1>
         <p className="text-sm">
           <span className="font-medium">{book.title}</span>
           <span className="text-muted-foreground">
@@ -165,13 +186,17 @@ async function GroupDetail({
             </p>
             <JoinForm groupId={group.id} />
           </section>
+          {bookInfo}
           {tableOfContents}
         </>
       )}
 
       {me && (
         <>
-          <nav aria-label="그룹 화면" className="flex gap-1 border-b">
+          <nav
+            aria-label="그룹 화면"
+            className="flex gap-1 overflow-x-auto border-b"
+          >
             {TABS.map(([key, label]) => (
               <Link
                 key={key}
@@ -183,8 +208,8 @@ async function GroupDetail({
                 aria-current={tab === key ? "page" : undefined}
                 className={
                   tab === key
-                    ? "border-foreground -mb-px border-b-2 px-3 py-2 text-sm font-medium"
-                    : "text-muted-foreground hover:text-foreground -mb-px border-b-2 border-transparent px-3 py-2 text-sm"
+                    ? "border-foreground -mb-px shrink-0 border-b-2 px-3 py-2 text-sm font-medium whitespace-nowrap"
+                    : "text-muted-foreground hover:text-foreground -mb-px shrink-0 border-b-2 border-transparent px-3 py-2 text-sm whitespace-nowrap"
                 }
               >
                 {label}
@@ -279,6 +304,13 @@ async function GroupDetail({
             </section>
           )}
 
+          {tab === "book" && (
+            <>
+              {bookInfo}
+              {tableOfContents}
+            </>
+          )}
+
           {tab === "info" && (
             <>
               <section className="flex flex-col gap-2 text-sm">
@@ -287,16 +319,22 @@ async function GroupDetail({
                   {group.is_public ? "공개 그룹" : "초대 전용 그룹"} · 정원{" "}
                   {group.capacity}명{period ? ` · ${period}` : ""}
                 </p>
-                <p className="text-muted-foreground">
-                  {[
-                    book.title,
-                    book.author,
-                    book.translator && `${book.translator} 옮김`,
-                    book.publisher,
-                  ]
-                    .filter(Boolean)
-                    .join(" · ")}
-                </p>
+                {isOwner && (
+                  <div className="flex flex-col gap-1 pt-1">
+                    <div>
+                      <Link
+                        href={`/groups/${group.id}/settings`}
+                        className={buttonVariants({ variant: "outline" })}
+                      >
+                        그룹 설정
+                      </Link>
+                    </div>
+                    <p className="text-muted-foreground">
+                      이름·정원·기간·공개 여부를 바꾸거나 회원을 관리하고 그룹을
+                      삭제할 수 있어요.
+                    </p>
+                  </div>
+                )}
               </section>
 
               <section className="flex flex-col gap-3">
@@ -306,8 +344,6 @@ async function GroupDetail({
                   이 링크를 받은 사람은 로그인한 뒤 그룹에 들어올 수 있어요.
                 </p>
               </section>
-
-              {tableOfContents}
 
               {!isOwner && (
                 <section className="flex flex-col gap-2 border-t pt-6">
