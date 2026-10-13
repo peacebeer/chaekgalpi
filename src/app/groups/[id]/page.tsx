@@ -4,6 +4,7 @@ import { notFound } from "next/navigation";
 import { Suspense } from "react";
 
 import { ExchangeSection } from "@/components/exchange/exchange-section";
+import { RealtimeRefresher } from "@/components/exchange/realtime-refresher";
 import { ConfirmAction } from "@/components/groups/confirm-action";
 import { InviteLink } from "@/components/groups/invite-link";
 import { JoinForm } from "@/components/groups/join-form";
@@ -302,6 +303,11 @@ async function GroupDetail({
                 막대는 장마다 길이가 같다고 보고 어림한 값이에요.
               </p>
             </section>
+          )}
+
+          {/* 감상 목록과 진도 현황은 다른 회원의 변경을 바로 반영한다 */}
+          {(tab === "feed" || tab === "progress") && (
+            <RealtimeRefresher groupId={group.id} />
           )}
 
           {tab === "book" && (
