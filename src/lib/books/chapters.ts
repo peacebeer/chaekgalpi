@@ -56,16 +56,22 @@ function parseLine(line: string): ParsedLine {
   };
 }
 
-// 숫자만 붙은 줄들을 쪽수로 볼지 정한다. 쪽수라면 모든 줄에 있고 뒤로 갈수록 커진다.
+// 쪽수가 붙은 줄이 이 비율 이상이면 목차 전체를 "쪽수가 있는 목차"로 본다.
+// 부 제목이나 프롤로그처럼 쪽수 없이 적힌 줄이 섞이는 실제 목차를 받기 위해서다.
+const PAGED_SHARE = 0.6;
+
+// 숫자만 붙은 줄들을 쪽수로 볼지 정한다. 쪽수라면 대부분의 줄에 있고 뒤로 갈수록 커진다.
 // 1, 2, 3처럼 1씩 늘어나면 "챕터 1, 챕터 2" 같은 장 번호로 보고 제목에 남긴다.
 // "|"를 쓴 줄이 하나라도 있으면 형식을 알고 쓴 것이므로 추측하지 않는다.
 function bareNumbersArePages(lines: ParsedLine[]): boolean {
   const bareLines = lines.filter((item) => item.bare);
   if (bareLines.length < 2) return false;
   if (lines.some((item) => item.line.includes("|"))) return false;
-  if (lines.some((item) => item.page === null && !item.bare)) return false;
 
-  const pages = lines.map((item) => item.page ?? item.bare!.page);
+  const paged = lines.filter((item) => item.page !== null || item.bare);
+  if (paged.length < lines.length * PAGED_SHARE) return false;
+
+  const pages = paged.map((item) => item.page ?? item.bare!.page);
   const increasing = pages.every(
     (page, index) => index === 0 || page >= pages[index - 1],
   );

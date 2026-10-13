@@ -76,9 +76,31 @@ describe("toNlkBooks", () => {
         publisher: "문학동네",
         pages: 189,
         year: "2018",
+        tocText: null,
         tocUrl: doc.BOOK_TB_CNT_URL,
+        hasToc: true,
       },
     ]);
+  });
+
+  test("목차 글이 응답에 담겨 오면 주소가 없어도 목차가 있다고 본다", () => {
+    const { docs } = nlkResponseSchema.parse({
+      docs: [
+        {
+          ...doc,
+          BOOK_TB_CNT: "프롤로그 17\r\n시선감옥 53\r\n",
+          BOOK_TB_CNT_URL: "",
+        },
+        { ...doc, EA_ISBN: "9788954651301", BOOK_TB_CNT_URL: "" },
+      ],
+    });
+    const [withText, without] = toNlkBooks(docs);
+    expect(withText).toMatchObject({
+      tocText: "프롤로그 17\r\n시선감옥 53",
+      tocUrl: null,
+      hasToc: true,
+    });
+    expect(without).toMatchObject({ tocText: null, hasToc: false });
   });
 
   test("ISBN이 없거나 겹치는 자료는 뺀다", () => {
