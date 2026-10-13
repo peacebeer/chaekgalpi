@@ -193,7 +193,8 @@ export async function ExchangeSection({
           </p>
           <p className="leading-7 whitespace-pre-wrap">{note.body}</p>
 
-          <div className="flex flex-wrap items-center gap-2">
+          {/* 위쪽 맞춤: 오른쪽 묶음이 아래로 펼쳐져도 좋아요가 따라 내려가지 않는다 */}
+          <div className="flex flex-wrap items-start gap-2">
             <form action={toggleLike}>
               <input type="hidden" name="noteId" value={note.id} />
               <input type="hidden" name="liked" value={String(liked)} />
@@ -208,7 +209,7 @@ export async function ExchangeSection({
               </Button>
             </form>
             {note.likedBy.length > 0 && (
-              <span className="text-muted-foreground text-sm">
+              <span className="text-muted-foreground py-1 text-sm">
                 {note.likedBy.map((id) => nameOf(id)).join(", ")}
               </span>
             )}
