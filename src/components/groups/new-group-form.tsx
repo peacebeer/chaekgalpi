@@ -235,7 +235,7 @@ export function NewGroupForm() {
                       {[found.author, found.publisher, found.year]
                         .filter(Boolean)
                         .join(" · ")}
-                      {found.tocUrl ? " · 목차 있음" : ""}
+                      {found.hasToc ? " · 목차 있음" : ""}
                     </span>
                   </button>
                 </li>
