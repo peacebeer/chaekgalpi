@@ -6,9 +6,11 @@ import { Suspense } from "react";
 import { ConfirmAction } from "@/components/groups/confirm-action";
 import { InviteLink } from "@/components/groups/invite-link";
 import { JoinForm } from "@/components/groups/join-form";
+import { ProgressForm } from "@/components/groups/progress-form";
 import { buttonVariants } from "@/components/ui/button";
 import { requireUser } from "@/lib/auth/session";
 import { isWholeBook } from "@/lib/books/chapters";
+import { overallPercent, positionLabel } from "@/lib/books/progress";
 import { createClient } from "@/lib/supabase/server";
 import { uuidSchema } from "@/lib/validation/common";
 
@@ -51,12 +53,15 @@ async function GroupDetail({
   // RLS: 회원이 아니면 빈 목록이 온다.
   const { data: members } = await supabase
     .from("memberships")
-    .select("user_id, role, joined_at, profiles(nickname)")
+    .select(
+      "user_id, role, joined_at, progress_chapter, progress_pct, finished_at, profiles(nickname)",
+    )
     .eq("group_id", group.id)
     .order("joined_at");
 
   const memberList = members ?? [];
-  const isMember = memberList.some((member) => member.user_id === user.id);
+  const me = memberList.find((member) => member.user_id === user.id);
+  const isMember = Boolean(me);
   const isOwner = group.owner_id === user.id;
   const book = group.books;
   const chapters = [...book.book_chapters].sort((a, b) => a.number - b.number);
@@ -112,22 +117,74 @@ async function GroupDetail({
 
       {isMember && (
         <>
+          {me && (
+            <section className="flex flex-col gap-3">
+              <h2 className="text-lg font-semibold">내 진도</h2>
+              <ProgressForm
+                groupId={group.id}
+                chapters={chapters.map(({ number, title }) => ({
+                  number,
+                  title,
+                }))}
+                wholeBook={wholeBook}
+                canUsePages={chapters.every((chapter) => chapter.start_page)}
+                initial={{
+                  chapter: me.progress_chapter,
+                  pct: Number(me.progress_pct),
+                  finished: Boolean(me.finished_at),
+                }}
+              />
+            </section>
+          )}
+
           <section className="flex flex-col gap-3">
             <h2 className="text-lg font-semibold">
-              회원 {memberList.length}/{group.capacity}명
+              진도 현황 · 회원 {memberList.length}/{group.capacity}명
             </h2>
-            <ul className="flex flex-wrap gap-2">
-              {memberList.map((member) => (
-                <li
-                  key={member.user_id}
-                  className="bg-muted rounded-full px-3 py-1 text-sm"
-                >
-                  {member.profiles?.nickname ?? "독자"}
-                  {member.role === "owner" ? " (리더)" : ""}
-                  {member.user_id === user.id ? " · 나" : ""}
-                </li>
-              ))}
+            <ul className="flex flex-col gap-3">
+              {memberList.map((member) => {
+                const position = {
+                  chapter: member.progress_chapter,
+                  pct: Number(member.progress_pct),
+                };
+                const finished = Boolean(member.finished_at);
+                const percent = overallPercent(
+                  position,
+                  chapters.length,
+                  finished,
+                );
+                return (
+                  <li key={member.user_id} className="flex flex-col gap-1">
+                    <div className="flex items-baseline justify-between gap-3 text-sm">
+                      <span>
+                        {member.profiles?.nickname ?? "독자"}
+                        {member.role === "owner" ? " (리더)" : ""}
+                        {member.user_id === user.id ? " · 나" : ""}
+                      </span>
+                      <span className="text-muted-foreground tabular-nums">
+                        {positionLabel(position, wholeBook, finished)}
+                      </span>
+                    </div>
+                    <div
+                      role="progressbar"
+                      aria-label={`${member.profiles?.nickname ?? "독자"} 진도`}
+                      aria-valuemin={0}
+                      aria-valuemax={100}
+                      aria-valuenow={Math.round(percent)}
+                      className="bg-muted h-2 overflow-hidden rounded-full"
+                    >
+                      <div
+                        className="bg-foreground h-full rounded-full"
+                        style={{ width: `${percent}%` }}
+                      />
+                    </div>
+                  </li>
+                );
+              })}
             </ul>
+            <p className="text-muted-foreground text-sm">
+              막대는 장마다 길이가 같다고 보고 어림한 값이에요.
+            </p>
           </section>
 
           <section className="flex flex-col gap-3">
