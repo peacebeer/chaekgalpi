@@ -1,7 +1,19 @@
-import { setNoteHidden, toggleLike } from "@/app/groups/[id]/exchange-actions";
+import type { ReactNode } from "react";
+
+import {
+  deleteNote,
+  deleteQuote,
+  setNoteHidden,
+  toggleLike,
+  updateNote,
+  updateQuote,
+} from "@/app/groups/[id]/exchange-actions";
 import { Composer } from "@/components/exchange/composer";
+import { EditForm } from "@/components/exchange/edit-form";
 import { NoteForm } from "@/components/exchange/note-form";
 import type { PickerProgress } from "@/components/exchange/position-picker";
+import { ToolPanels } from "@/components/exchange/tool-panels";
+import { ConfirmAction } from "@/components/groups/confirm-action";
 import { Button } from "@/components/ui/button";
 import { positionLabel } from "@/lib/books/progress";
 import {
@@ -24,11 +36,13 @@ type ExchangeSectionProps = {
   progress: PickerProgress;
   // 회원 id → 닉네임 (지금 그룹에 있는 회원만)
   nicknames: Record<string, string>;
+  // "내 진도" 버튼을 누르면 펼쳐질 입력 칸
+  progressForm: ReactNode;
 };
 
 const FORMER_MEMBER = "나간 회원";
 
-// 그룹의 인용 카드·감상 목록과 글쓰기 칸.
+// 교환 독서 화면의 본문: 접어 둔 보조 기능(내 진도, 글 남기기)과 인용·감상 목록.
 // 여기서 읽는 행은 모두 RLS를 통과한 것(내 진도 이하)뿐이다. 잠긴 글은 개수만 따로 받는다.
 export async function ExchangeSection({
   groupId,
@@ -39,13 +53,14 @@ export async function ExchangeSection({
   wholeBook,
   progress,
   nicknames,
+  progressForm,
 }: ExchangeSectionProps) {
   const supabase = await createClient();
-  const [{ data: quotes }, { data: notes }, { data: locked }] =
+  const [{ data: quotes }, { data: notes }, { data: locked }, { data: usage }] =
     await Promise.all([
       supabase
         .from("quotes")
-        .select("id, chapter, pct, text, created_by, created_at")
+        .select("id, chapter, pct, text, created_by, locked_at, created_at")
         .eq("group_id", groupId),
       supabase
         .from("notes")
@@ -54,6 +69,7 @@ export async function ExchangeSection({
         )
         .eq("group_id", groupId),
       supabase.rpc("locked_counts", { p_group_id: groupId }),
+      supabase.rpc("quote_usage", { p_group_id: groupId }),
     ]);
 
   const feed = buildFeed(
@@ -63,6 +79,7 @@ export async function ExchangeSection({
       pct: Number(row.pct),
       text: row.text,
       createdBy: row.created_by,
+      locked: Boolean(row.locked_at),
       createdAt: row.created_at,
     })),
     (notes ?? []).map((row) => ({
@@ -88,6 +105,9 @@ export async function ExchangeSection({
   const lockedByChapter = new Map(
     lockedCounts.map((row) => [row.chapter, row]),
   );
+  const quota = usage?.[0]
+    ? { used: usage[0].used, limit: usage[0].quote_limit }
+    : null;
 
   // 열린 글이 있는 장과 잠긴 글만 있는 장을 함께, 장 순서대로 보여 준다.
   const sectionKeys = [
@@ -106,10 +126,16 @@ export async function ExchangeSection({
 
   const renderNote = (note: FeedNote, isReply = false) => {
     const liked = note.likedBy.includes(userId);
+    const mine = note.authorId === userId;
     return (
       <li
         key={note.id}
-        className={isReply ? "border-l pl-3" : "flex flex-col gap-2"}
+        id={`note-${note.id}`}
+        className={
+          isReply
+            ? "scroll-mt-4 border-l pl-3"
+            : "flex scroll-mt-4 flex-col gap-2"
+        }
       >
         <div className="flex flex-col gap-1">
           <p className="text-muted-foreground text-sm">
@@ -147,6 +173,28 @@ export async function ExchangeSection({
               placeholder="답글을 적어 주세요"
             />
           )}
+          {mine && (
+            <>
+              <EditForm
+                action={updateNote}
+                fields={{ noteId: note.id }}
+                name="body"
+                initial={note.body}
+                label="수정"
+              />
+              <ConfirmAction
+                action={deleteNote}
+                fields={{ noteId: note.id }}
+                label="삭제"
+                question={
+                  note.replies.length > 0
+                    ? `이 글을 지울까요? 달린 답글 ${note.replies.length}개도 함께 지워져요.`
+                    : "이 글을 지울까요? 되돌릴 수 없어요."
+                }
+                confirmLabel="삭제"
+              />
+            </>
+          )}
           {isOwner && (
             <form action={setNoteHidden}>
               <input type="hidden" name="noteId" value={note.id} />
@@ -182,6 +230,14 @@ export async function ExchangeSection({
       );
     }
 
+    const isCreator = thread.createdBy === userId;
+    // 등록자는 잠기기 전에는 자유롭게 고친다. 잠긴 뒤와 리더는 오타 수정만.
+    const typoOnly = thread.locked || !isCreator;
+    const noteCount = thread.notes.reduce(
+      (sum, note) => sum + 1 + note.replies.length,
+      0,
+    );
+
     return (
       <li
         key={thread.id}
@@ -195,6 +251,42 @@ export async function ExchangeSection({
           <figcaption className="text-muted-foreground text-sm">
             『{bookTitle}』 {where} · {nameOf(thread.createdBy)} 님이 옮김
           </figcaption>
+          {(isCreator || isOwner) && (
+            <div className="flex flex-wrap items-start gap-2">
+              <EditForm
+                action={updateQuote}
+                fields={{ quoteId: thread.id }}
+                name="text"
+                initial={thread.text}
+                label="인용문 수정"
+                hint={
+                  typoOnly
+                    ? isCreator
+                      ? "다른 회원의 감상이 달린 카드라 오타 수정(10자 이내)만 할 수 있어요."
+                      : "다른 회원이 옮긴 문장이라 오타 수정(10자 이내)만 할 수 있어요."
+                    : undefined
+                }
+              />
+              {isCreator && !thread.locked && (
+                <ConfirmAction
+                  action={deleteQuote}
+                  fields={{ quoteId: thread.id }}
+                  label="카드 삭제"
+                  question="이 인용 카드와 내 감상을 지울까요? 되돌릴 수 없어요."
+                  confirmLabel="삭제"
+                />
+              )}
+              {isOwner && (thread.locked || !isCreator) && (
+                <ConfirmAction
+                  action={deleteQuote}
+                  fields={{ quoteId: thread.id, asLeader: "true" }}
+                  label="카드 내리기 (리더)"
+                  question={`이 인용 카드를 내릴까요? 카드에 달린 감상·답글 ${noteCount}개도 함께 지워지고 되돌릴 수 없어요.`}
+                  confirmLabel="내리기"
+                />
+              )}
+            </div>
+          )}
         </figure>
         <ul className="flex flex-col gap-4">
           {thread.notes.map((note) => renderNote(note))}
@@ -213,24 +305,37 @@ export async function ExchangeSection({
 
   return (
     <>
-      <section className="flex flex-col gap-3">
-        <h2 className="text-lg font-semibold">글 남기기</h2>
-        <Composer
-          // 진도를 저장하면 고를 수 있는 위치가 달라지므로 새로 만든다.
-          key={`${progress.chapter}-${progress.pct}-${progress.finished}`}
-          groupId={groupId}
-          chapters={chapters}
-          wholeBook={wholeBook}
-          progress={progress}
-        />
-      </section>
+      <ToolPanels
+        panels={[
+          {
+            id: "progress",
+            label: `내 진도 · ${positionLabel(progress, wholeBook, progress.finished)}`,
+            content: progressForm,
+          },
+          {
+            id: "compose",
+            label: "글 남기기",
+            content: (
+              <Composer
+                // 진도를 저장하면 고를 수 있는 위치가 달라지므로 새로 만든다.
+                key={`${progress.chapter}-${progress.pct}-${progress.finished}`}
+                groupId={groupId}
+                chapters={chapters}
+                wholeBook={wholeBook}
+                progress={progress}
+                quota={quota}
+              />
+            ),
+          },
+        ]}
+      />
 
       <section className="flex flex-col gap-6">
-        <h2 className="text-lg font-semibold">인용과 감상</h2>
+        <h2 className="sr-only">인용과 감상</h2>
         {sectionKeys.length === 0 && (
           <p className="text-muted-foreground text-sm">
-            아직 글이 없어요. 읽다가 마음에 남은 문장이나 생각을 처음으로 남겨
-            보세요.
+            아직 글이 없어요. 위의 &ldquo;글 남기기&rdquo;로 마음에 남은
+            문장이나 생각을 처음으로 남겨 보세요.
           </p>
         )}
         {sectionKeys.map((chapter) => {

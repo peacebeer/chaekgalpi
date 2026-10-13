@@ -40,3 +40,8 @@ test("로그인하지 않고 그룹 설정에 가면 로그인 화면으로 보�
     new RegExp(`/login\\?next=${encodeURIComponent(path)}$`),
   );
 });
+
+test("로그인하지 않고 알림에 가면 로그인 화면으로 보낸다", async ({ page }) => {
+  await page.goto("/notifications");
+  await expect(page).toHaveURL(/\/login\?next=%2Fnotifications$/);
+});
