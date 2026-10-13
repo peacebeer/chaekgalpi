@@ -14,7 +14,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { parseChapterLines } from "@/lib/books/chapters";
-import { EMPTY_FORM_STATE } from "@/lib/form-state";
+import { EMPTY_FORM_STATE, type FormState } from "@/lib/form-state";
 import { LIMITS } from "@/lib/validation/limits";
 
 const EMPTY_BOOK = {
@@ -35,13 +35,16 @@ const INITIAL_GROUP = {
   isPublic: false,
 };
 
-export function NewGroupForm() {
-  const [state, formAction, pending] = useActionState(
-    createGroup,
-    EMPTY_FORM_STATE,
-  );
+const STEPS = ["책 찾기", "책 정보와 목차", "그룹 정보"] as const;
+type Step = 1 | 2 | 3;
 
-  // 검색 결과로 채우거나 오류 뒤에도 입력을 지키기 위해 모든 칸을 직접 관리한다.
+// 서버가 돌려준 오류가 2단계(책) 칸의 것인지
+const BOOK_FIELDS = new Set([...Object.keys(EMPTY_BOOK), "source"]);
+
+export function NewGroupForm() {
+  const [step, setStep] = useState<Step>(1);
+
+  // 검색 결과로 채우거나 단계를 오가도 입력을 지키기 위해 모든 칸을 직접 관리한다.
   const [book, setBook] = useState(EMPTY_BOOK);
   const [group, setGroup] = useState(INITIAL_GROUP);
   const [source, setSource] = useState<"nlk" | "manual">("manual");
@@ -51,7 +54,27 @@ export function NewGroupForm() {
   const [query, setQuery] = useState("");
   const [search, setSearch] = useState<BookSearchResult | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
+  const [pickError, setPickError] = useState<string | null>(null);
   const [searching, startSearch] = useTransition();
+
+  // 2단계에서 "다음"을 눌렀을 때의 안내
+  const [titleMissing, setTitleMissing] = useState(false);
+  const [confirmNoChapters, setConfirmNoChapters] = useState(false);
+
+  const [state, formAction, pending] = useActionState(
+    async (prev: FormState, formData: FormData) => {
+      const result = await createGroup(prev, formData);
+      // 책 쪽에 문제가 있으면 그 단계로 돌아가서 보여 준다.
+      const bookProblem =
+        Boolean(result.values?.conflictIsbn) ||
+        Object.keys(result.fieldErrors ?? {}).some((key) =>
+          BOOK_FIELDS.has(key),
+        );
+      if (bookProblem) setStep(2);
+      return result;
+    },
+    EMPTY_FORM_STATE,
+  );
 
   const errors = state.fieldErrors ?? {};
   // 등록된 목차를 그대로 쓰는 동안에는 책 정보를 고칠 수 없다.
@@ -61,26 +84,28 @@ export function NewGroupForm() {
   const mustChoose =
     choice === "" &&
     Boolean(conflictIsbn) &&
-    book.isbn.replace(/[s-]/g, "").toUpperCase() === conflictIsbn;
+    book.isbn.replace(/[\s-]/g, "").toUpperCase() === conflictIsbn;
   const chapterCount = parseChapterLines(book.chapters).length;
 
   function editBook(field: keyof typeof EMPTY_BOOK, value: string) {
     setBook((current) => ({ ...current, [field]: value }));
+    if (field === "title") setTitleMissing(false);
+    if (field === "chapters") setConfirmNoChapters(false);
   }
 
   function runSearch() {
-    setNotice(null);
+    setPickError(null);
     startSearch(async () => {
       setSearch(await searchBooks(query));
     });
   }
 
   function choose(isbn: string) {
-    setNotice(null);
+    setPickError(null);
     startSearch(async () => {
       const result = await pickBook(isbn);
       if (!result.ok) {
-        setNotice(result.message);
+        setPickError(result.message);
         return;
       }
       const { chaptersText, existing: saved, ...fields } = result.book;
@@ -88,109 +113,170 @@ export function NewGroupForm() {
       setSource("nlk");
       setChoice(saved ? "reuse" : "");
       setSearch(null);
+      setTitleMissing(false);
+      setConfirmNoChapters(false);
       setNotice(
         saved
           ? null
           : chaptersText
             ? "책 정보와 목차를 불러왔어요. 목차가 실제 책과 맞는지 확인해 주세요."
-            : "책 정보를 불러왔어요. 이 책은 목차 자료가 없어서 직접 입력해야 해요.",
+            : "책 정보를 불러왔어요. 이 책은 목차 자료가 없어요.",
       );
+      setStep(2);
     });
   }
 
-  function resetBook() {
+  function enterManually() {
     setBook(EMPTY_BOOK);
     setSource("manual");
     setChoice("");
     setNotice(null);
+    setPickError(null);
+    setTitleMissing(false);
+    setConfirmNoChapters(false);
+    setStep(2);
+  }
+
+  function leaveBookStep() {
+    if (!book.title.trim()) {
+      setTitleMissing(true);
+      return;
+    }
+    // 목차가 없으면 한 번 알리고, 다시 누르면 넘어간다.
+    if (chapterCount === 0 && !confirmNoChapters) {
+      setConfirmNoChapters(true);
+      return;
+    }
+    setStep(3);
   }
 
   return (
-    <div className="flex flex-col gap-8">
-      <section className="flex flex-col gap-3">
-        <h2 className="text-lg font-semibold">1. 함께 읽을 책 찾기</h2>
-        <div className="flex gap-2">
-          <Input
-            aria-label="책 제목 또는 ISBN"
-            placeholder="책 제목 또는 ISBN"
-            value={query}
-            onChange={(event) => setQuery(event.target.value)}
-            onKeyDown={(event) => {
-              if (event.key === "Enter") {
-                event.preventDefault();
-                runSearch();
+    <div className="flex flex-col gap-6">
+      <ol className="flex gap-2 text-sm" aria-label="진행 단계">
+        {STEPS.map((label, index) => {
+          const current = index + 1 === step;
+          return (
+            <li
+              key={label}
+              aria-current={current ? "step" : undefined}
+              className={
+                current
+                  ? "bg-foreground text-background rounded-full px-3 py-1"
+                  : "text-muted-foreground bg-muted rounded-full px-3 py-1"
               }
-            }}
-          />
-          <Button
-            type="button"
-            variant="outline"
-            onClick={runSearch}
-            disabled={searching}
-          >
-            {searching ? "찾는 중…" : "검색"}
-          </Button>
-        </div>
-        <p className="text-muted-foreground text-sm">
-          국립중앙도서관 자료에서 찾아요. 없으면 아래에 직접 입력하면 돼요.
-        </p>
+            >
+              {index + 1}. {label}
+            </li>
+          );
+        })}
+      </ol>
 
-        {search && !search.ok && (
-          <p role="alert" className="text-destructive text-sm">
-            {search.message}
+      {step === 1 && (
+        <section className="flex flex-col gap-3">
+          <h2 className="text-lg font-semibold">1. 함께 읽을 책 찾기</h2>
+          <div className="flex gap-2">
+            <Input
+              aria-label="책 제목 또는 ISBN"
+              placeholder="책 제목 또는 ISBN"
+              value={query}
+              onChange={(event) => setQuery(event.target.value)}
+              onKeyDown={(event) => {
+                if (event.key === "Enter") {
+                  event.preventDefault();
+                  runSearch();
+                }
+              }}
+            />
+            <Button
+              type="button"
+              variant="outline"
+              onClick={runSearch}
+              disabled={searching}
+            >
+              {searching ? "찾는 중…" : "검색"}
+            </Button>
+          </div>
+          <p className="text-muted-foreground text-sm">
+            국립중앙도서관 자료에서 찾아요. 책을 고르면 다음 단계로 넘어가요.
           </p>
-        )}
-        {search?.ok && search.books.length === 0 && (
-          <p className="text-sm">
-            찾는 책이 없어요. 아래에 책 정보를 직접 입력해 주세요.
-          </p>
-        )}
-        {search?.ok && search.books.length > 0 && (
-          <ul className="divide-y rounded-lg border">
-            {search.books.map((found) => (
-              <li key={found.isbn}>
-                <button
-                  type="button"
-                  className="hover:bg-muted flex w-full flex-col gap-0.5 px-3 py-2 text-left"
-                  onClick={() => choose(found.isbn)}
-                  disabled={searching}
-                >
-                  <span className="font-medium">{found.title}</span>
-                  <span className="text-muted-foreground text-sm">
-                    {[found.author, found.publisher, found.year]
-                      .filter(Boolean)
-                      .join(" · ")}
-                    {found.tocUrl ? " · 목차 있음" : ""}
-                  </span>
-                </button>
-              </li>
-            ))}
-          </ul>
-        )}
-        {notice && (
-          <p role="status" className="bg-muted rounded-lg p-3 text-sm">
-            {notice}
-          </p>
-        )}
-      </section>
 
-      <form action={formAction} className="flex flex-col gap-8" noValidate>
-        <section className="flex flex-col gap-4">
-          <div className="flex items-center justify-between">
-            <h2 className="text-lg font-semibold">2. 책 정보와 목차</h2>
-            {(source === "nlk" || book.title) && (
-              <Button
-                type="button"
-                variant="ghost"
-                size="sm"
-                onClick={resetBook}
-              >
-                지우고 직접 입력
+          {search && !search.ok && (
+            <p role="alert" className="text-destructive text-sm">
+              {search.message}
+            </p>
+          )}
+          {search?.ok && search.books.length === 0 && (
+            <p className="text-sm">
+              찾는 책이 없어요. 아래 버튼으로 책 정보를 직접 입력해 주세요.
+            </p>
+          )}
+          {search?.ok && search.books.length > 0 && (
+            <ul className="divide-y rounded-lg border">
+              {search.books.map((found) => (
+                <li key={found.isbn}>
+                  <button
+                    type="button"
+                    className="hover:bg-muted flex w-full flex-col gap-0.5 px-3 py-2 text-left"
+                    onClick={() => choose(found.isbn)}
+                    disabled={searching}
+                  >
+                    <span className="font-medium">{found.title}</span>
+                    <span className="text-muted-foreground text-sm">
+                      {[found.author, found.publisher, found.year]
+                        .filter(Boolean)
+                        .join(" · ")}
+                      {found.tocUrl ? " · 목차 있음" : ""}
+                    </span>
+                  </button>
+                </li>
+              ))}
+            </ul>
+          )}
+          {pickError && (
+            <p role="alert" className="text-destructive text-sm">
+              {pickError}
+            </p>
+          )}
+
+          <div className="flex flex-wrap justify-between gap-2 border-t pt-4">
+            <Button type="button" variant="outline" onClick={enterManually}>
+              검색 없이 직접 입력
+            </Button>
+            {book.title && (
+              <Button type="button" onClick={() => setStep(2)}>
+                다음
               </Button>
             )}
           </div>
-          <input type="hidden" name="source" value={source} />
-          <input type="hidden" name="bookChoice" value={choice} />
+        </section>
+      )}
+
+      <form
+        action={formAction}
+        // 단계가 바뀌어도 입력값이 함께 제출되도록 지우지 않고 숨기기만 한다.
+        hidden={step === 1}
+        className="flex flex-col gap-6"
+        onSubmit={(event) => {
+          // 입력 칸에서 Enter를 눌러도 마지막 단계 전에는 제출하지 않는다.
+          if (step !== 3) event.preventDefault();
+        }}
+        noValidate
+      >
+        <input type="hidden" name="source" value={source} />
+        <input type="hidden" name="bookChoice" value={choice} />
+
+        <section hidden={step !== 2} className="flex flex-col gap-4">
+          <h2 className="text-lg font-semibold">2. 책 정보와 목차</h2>
+          <p className="bg-muted rounded-lg p-3 text-sm">
+            책 정보와 목차는 그룹을 만든 뒤에는 수정할 수 없어요. 감상이 목차의
+            위치에 묶이기 때문이에요. 지금 한 번만 확인해 주세요.
+          </p>
+          {notice && (
+            <p role="status" className="text-sm">
+              {notice}
+            </p>
+          )}
+
           {(choice !== "" || mustChoose) && (
             <div className="flex flex-col gap-2 rounded-lg border p-3 text-sm">
               <p>
@@ -219,6 +305,7 @@ export function NewGroupForm() {
               </div>
             </div>
           )}
+
           <Field
             name="title"
             label="책 제목"
@@ -226,7 +313,10 @@ export function NewGroupForm() {
             onChange={(event) => editBook("title", event.target.value)}
             readOnly={existing}
             maxLength={LIMITS.bookTitleMax}
-            error={errors.title}
+            error={
+              errors.title ??
+              (titleMissing ? "책 제목을 입력해 주세요." : undefined)
+            }
             required
           />
           <div className="grid grid-cols-2 gap-3">
@@ -276,7 +366,7 @@ export function NewGroupForm() {
           />
 
           <div className="flex flex-col gap-1.5">
-            <Label htmlFor="chapters">목차</Label>
+            <Label htmlFor="chapters">목차 (선택, 권장)</Label>
             <Textarea
               id="chapters"
               name="chapters"
@@ -302,10 +392,43 @@ export function NewGroupForm() {
               돼요.
             </p>
           </div>
+
+          {confirmNoChapters && (
+            <div
+              role="alert"
+              className="flex flex-col gap-1 rounded-lg border p-3 text-sm"
+            >
+              <p className="font-medium">목차 없이 진행할까요?</p>
+              <p>
+                목차가 없으면 책 전체를 하나로 보고 &ldquo;책 전체의 몇
+                %&rdquo;로만 위치를 나눠요. 판본이 다르면 같은 %라도 내용이
+                어긋나서, 아직 읽지 않은 내용이 보이는 스포일러가 생기기 쉬워요.
+                장 제목만이라도 적는 것을 권장해요.
+              </p>
+              <p className="text-muted-foreground">
+                그대로 진행하려면 다음을 한 번 더 눌러 주세요.
+              </p>
+            </div>
+          )}
+
+          <div className="flex justify-between gap-2 border-t pt-4">
+            <Button type="button" variant="outline" onClick={() => setStep(1)}>
+              이전
+            </Button>
+            <Button type="button" onClick={leaveBookStep}>
+              {confirmNoChapters ? "목차 없이 다음" : "다음"}
+            </Button>
+          </div>
         </section>
 
-        <section className="flex flex-col gap-4">
+        <section hidden={step !== 3} className="flex flex-col gap-4">
           <h2 className="text-lg font-semibold">3. 그룹 정보</h2>
+          <p className="text-muted-foreground text-sm">
+            {book.title}
+            {chapterCount > 0
+              ? ` · 목차 ${chapterCount}개 장`
+              : " · 목차 없음(책 전체 %로 위치 표시)"}
+          </p>
           <Field
             name="name"
             label="그룹 이름"
@@ -371,6 +494,25 @@ export function NewGroupForm() {
               </span>
             </span>
           </label>
+          <p className="text-muted-foreground text-sm">
+            그룹 정보는 만든 뒤에도 그룹 설정에서 바꿀 수 있어요.
+          </p>
+
+          <div className="flex justify-between gap-2 border-t pt-4">
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => setStep(2)}
+              disabled={pending}
+            >
+              이전
+            </Button>
+            {step === 3 && (
+              <Button type="submit" disabled={pending}>
+                {pending ? "만드는 중…" : "그룹 만들기"}
+              </Button>
+            )}
+          </div>
         </section>
 
         {state.error && (
@@ -383,10 +525,6 @@ export function NewGroupForm() {
             입력한 내용을 다시 확인해 주세요.
           </p>
         )}
-
-        <Button type="submit" size="lg" disabled={pending}>
-          {pending ? "만드는 중…" : "그룹 만들기"}
-        </Button>
       </form>
     </div>
   );

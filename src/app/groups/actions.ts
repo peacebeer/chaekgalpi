@@ -4,7 +4,11 @@ import { redirect } from "next/navigation";
 import { z } from "zod";
 
 import { requireUser } from "@/lib/auth/session";
-import { formatChapterLines, parseChapterLines } from "@/lib/books/chapters";
+import {
+  formatChapterLines,
+  parseChapterLines,
+  wholeBookChapters,
+} from "@/lib/books/chapters";
 import { toErrorMessage } from "@/lib/errors";
 import { fieldErrorsOf, textOf, type FormState } from "@/lib/form-state";
 import { fetchNlkToc, searchNlk } from "@/lib/nlk/client";
@@ -199,15 +203,26 @@ export async function createGroup(
   const user = await requireUser("/groups/new");
 
   const pages = textOf(formData, "pages").trim();
+  const pageCount = pages === "" ? null : Number(pages);
+  // 목차는 선택이다. 비워 두면 책 전체를 한 장으로 둔다.
+  const typedChapters = parseChapterLines(textOf(formData, "chapters"));
+  const noChapters = typedChapters.length === 0;
   const book = bookSchema.safeParse({
-    isbn: textOf(formData, "isbn"),
+    // 목차 없는 책이 그 ISBN의 대표 목차로 다른 그룹에 제안되지 않도록 ISBN 없이 저장한다.
+    isbn: noChapters ? "" : textOf(formData, "isbn"),
     title: textOf(formData, "title"),
     author: textOf(formData, "author"),
     translator: textOf(formData, "translator"),
     publisher: textOf(formData, "publisher"),
-    pages: pages === "" ? null : Number(pages),
+    pages: pageCount,
     source: textOf(formData, "source") === "nlk" ? "nlk" : "manual",
-    chapters: parseChapterLines(textOf(formData, "chapters")),
+    chapters: noChapters
+      ? wholeBookChapters(
+          Number.isInteger(pageCount) && Number(pageCount) > 0
+            ? pageCount
+            : null,
+        )
+      : typedChapters,
   });
   const group = groupDetailsSchema.safeParse({
     name: textOf(formData, "name"),

@@ -8,6 +8,7 @@ import { InviteLink } from "@/components/groups/invite-link";
 import { JoinForm } from "@/components/groups/join-form";
 import { buttonVariants } from "@/components/ui/button";
 import { requireUser } from "@/lib/auth/session";
+import { isWholeBook } from "@/lib/books/chapters";
 import { createClient } from "@/lib/supabase/server";
 import { uuidSchema } from "@/lib/validation/common";
 
@@ -59,6 +60,7 @@ async function GroupDetail({
   const isOwner = group.owner_id === user.id;
   const book = group.books;
   const chapters = [...book.book_chapters].sort((a, b) => a.number - b.number);
+  const wholeBook = isWholeBook(chapters);
   const period = [group.start_date, group.target_date].some(Boolean)
     ? `${group.start_date ?? "시작일 미정"} ~ ${group.target_date ?? "완독일 미정"}`
     : null;
@@ -140,7 +142,13 @@ async function GroupDetail({
 
       <section className="flex flex-col gap-3">
         <h2 className="text-lg font-semibold">목차</h2>
-        <ol className="divide-y rounded-lg border">
+        {wholeBook && (
+          <p className="text-sm">
+            목차 없이 만든 그룹이에요. 위치는 &ldquo;책 전체의 몇 %&rdquo;로
+            나눠요. 판본이 다르면 같은 %라도 내용이 조금 어긋날 수 있어요.
+          </p>
+        )}
+        <ol className={wholeBook ? "hidden" : "divide-y rounded-lg border"}>
           {chapters.map((chapter) => (
             <li
               key={chapter.number}
@@ -160,10 +168,12 @@ async function GroupDetail({
             </li>
           ))}
         </ol>
-        <p className="text-muted-foreground text-sm">
-          이 목차가 그룹의 위치 기준이에요. 다른 판본을 읽는다면 가장 가까운
-          장으로 맞춰 주세요.
-        </p>
+        {!wholeBook && (
+          <p className="text-muted-foreground text-sm">
+            이 목차가 그룹의 위치 기준이에요. 다른 판본을 읽는다면 가장 가까운
+            장으로 맞춰 주세요.
+          </p>
+        )}
       </section>
 
       {isMember && !isOwner && (

@@ -1,6 +1,11 @@
 import { describe, expect, test } from "vitest";
 
-import { formatChapterLines, parseChapterLines } from "./chapters";
+import {
+  formatChapterLines,
+  isWholeBook,
+  parseChapterLines,
+  wholeBookChapters,
+} from "./chapters";
 
 describe("parseChapterLines", () => {
   test("국립중앙도서관 목차 파일 형식을 읽는다", () => {
@@ -54,5 +59,23 @@ describe("formatChapterLines", () => {
     const text = formatChapterLines(chapters);
     expect(text).toBe("1장 나 | 7\n작가의 말");
     expect(parseChapterLines(text)).toEqual(chapters);
+  });
+});
+
+describe("wholeBookChapters", () => {
+  test("목차가 없으면 책 전체를 한 장으로 둔다", () => {
+    expect(wholeBookChapters(null)).toEqual([
+      { number: 1, title: "책 전체", startPage: null },
+    ]);
+    expect(isWholeBook(wholeBookChapters(null))).toBe(true);
+  });
+
+  test("전체 쪽수를 알면 1쪽부터 시작하게 해 쪽수 입력을 받는다", () => {
+    expect(wholeBookChapters(189)[0].startPage).toBe(1);
+  });
+
+  test("직접 적은 목차는 책 전체로 보지 않는다", () => {
+    expect(isWholeBook(parseChapterLines("1장 나\n2장 그녀"))).toBe(false);
+    expect(isWholeBook(parseChapterLines("프롤로그"))).toBe(false);
   });
 });
