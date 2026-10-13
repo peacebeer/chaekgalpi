@@ -41,3 +41,15 @@ export function formatChapterLines(
     )
     .join("\n");
 }
+
+export const WHOLE_BOOK_TITLE = "책 전체";
+
+// 목차 없이 만든 책: 책 전체를 한 장으로 두고 "책 전체의 몇 %"로 위치를 나눈다.
+// 전체 쪽수를 알면 1쪽부터 시작한다고 두어, 쪽수 입력을 %로 바꿀 수 있게 한다.
+export function wholeBookChapters(pages: number | null): ChapterDraft[] {
+  return [{ number: 1, title: WHOLE_BOOK_TITLE, startPage: pages ? 1 : null }];
+}
+
+export function isWholeBook(chapters: Pick<ChapterDraft, "title">[]): boolean {
+  return chapters.length === 1 && chapters[0].title === WHOLE_BOOK_TITLE;
+}
