@@ -85,7 +85,8 @@ export function NewGroupForm() {
     choice === "" &&
     Boolean(conflictIsbn) &&
     book.isbn.replace(/[\s-]/g, "").toUpperCase() === conflictIsbn;
-  const chapterCount = parseChapterLines(book.chapters).length;
+  const parsedChapters = parseChapterLines(book.chapters);
+  const chapterCount = parsedChapters.length;
 
   function editBook(field: keyof typeof EMPTY_BOOK, value: string) {
     setBook((current) => ({ ...current, [field]: value }));
@@ -386,11 +387,45 @@ export function NewGroupForm() {
               </p>
             )}
             <p id="chapters-hint" className="text-muted-foreground text-sm">
-              한 줄에 한 장씩 적어 주세요. 지금 {chapterCount}개 장이에요. 줄
-              끝에 <code>| 7</code>처럼 시작 쪽을 붙이면 같은 책을 읽는 회원이
-              쪽수로 진도를 입력할 수 있어요. 이 목차가 그룹 전체의 위치 기준이
-              돼요.
+              한 줄에 한 장씩 적어 주세요. 줄 끝에 시작 쪽을 붙이면(예:{" "}
+              <code>어린 새 | 7</code>, <code>어린 새 7쪽</code>) 같은 책을 읽는
+              회원이 쪽수로 진도를 입력할 수 있어요. 이 목차가 그룹 전체의 위치
+              기준이 돼요.
             </p>
+            {chapterCount > 0 && (
+              <div className="flex flex-col gap-1.5">
+                <p className="text-sm font-medium">
+                  이렇게 저장돼요 ({chapterCount}개 장)
+                </p>
+                <ol
+                  aria-label="목차 미리 보기"
+                  className="max-h-56 divide-y overflow-y-auto rounded-lg border text-sm"
+                >
+                  {parsedChapters.map((chapter) => (
+                    <li
+                      key={chapter.number}
+                      className="flex items-baseline justify-between gap-3 px-3 py-1.5"
+                    >
+                      <span>
+                        <span className="text-muted-foreground mr-2 tabular-nums">
+                          {chapter.number}
+                        </span>
+                        {chapter.title}
+                      </span>
+                      <span className="text-muted-foreground shrink-0 tabular-nums">
+                        {chapter.startPage
+                          ? `${chapter.startPage}쪽`
+                          : "쪽수 없음"}
+                      </span>
+                    </li>
+                  ))}
+                </ol>
+                <p className="text-muted-foreground text-sm">
+                  제목과 쪽수가 잘못 나뉘었으면 그 줄을 <code>제목 | 쪽수</code>{" "}
+                  형식으로 고쳐 주세요.
+                </p>
+              </div>
+            )}
           </div>
 
           {confirmNoChapters && (

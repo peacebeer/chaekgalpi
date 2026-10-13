@@ -31,6 +31,8 @@ type GroupCard = {
   name: string;
   capacity: number;
   books: { title: string; author: string | null };
+  // 내 그룹 목록에서만 채운다.
+  isLeader?: boolean;
 };
 
 function GroupList({ groups, empty }: { groups: GroupCard[]; empty: string }) {
@@ -46,7 +48,14 @@ function GroupList({ groups, empty }: { groups: GroupCard[]; empty: string }) {
             href={`/groups/${group.id}`}
             className="hover:bg-muted flex flex-col gap-0.5 px-3 py-3"
           >
-            <span className="font-medium">{group.name}</span>
+            <span className="flex items-center gap-2 font-medium">
+              {group.name}
+              {group.isLeader && (
+                <span className="bg-foreground text-background rounded-full px-2 py-0.5 text-xs font-medium">
+                  리더
+                </span>
+              )}
+            </span>
             <span className="text-muted-foreground text-sm">
               {[
                 group.books.title,
@@ -71,7 +80,7 @@ async function GroupLists() {
   const [{ data: mine }, { data: open }] = await Promise.all([
     supabase
       .from("memberships")
-      .select(`joined_at, groups(${columns})`)
+      .select(`role, joined_at, groups(${columns})`)
       .eq("user_id", user.id)
       .order("joined_at", { ascending: false }),
     supabase
@@ -82,7 +91,10 @@ async function GroupLists() {
       .limit(50),
   ]);
 
-  const myGroups = (mine ?? []).map((membership) => membership.groups);
+  const myGroups = (mine ?? []).map((membership) => ({
+    ...membership.groups,
+    isLeader: membership.role === "owner",
+  }));
   const myIds = new Set(myGroups.map((group) => group.id));
   const publicGroups = (open ?? []).filter((group) => !myIds.has(group.id));
 
