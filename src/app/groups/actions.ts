@@ -29,8 +29,11 @@ const searchQuerySchema = z
   .min(1, "책 제목이나 ISBN을 입력해 주세요.")
   .max(100, "검색어가 너무 길어요.");
 
+// 검색 목록에는 목차 글 전체를 싣지 않는다(있는지만 알린다).
+export type BookSearchItem = Omit<NlkBook, "tocText" | "tocUrl">;
+
 export type BookSearchResult =
-  { ok: true; books: NlkBook[] } | { ok: false; message: string };
+  { ok: true; books: BookSearchItem[] } | { ok: false; message: string };
 
 // 국립중앙도서관 검색. 로그인한 사용자만 쓸 수 있다.
 export async function searchBooks(query: string): Promise<BookSearchResult> {
@@ -42,7 +45,20 @@ export async function searchBooks(query: string): Promise<BookSearchResult> {
   }
 
   try {
-    return { ok: true, books: await searchNlk(parsed.data) };
+    const books = await searchNlk(parsed.data);
+    return {
+      ok: true,
+      books: books.map((book) => ({
+        isbn: book.isbn,
+        title: book.title,
+        author: book.author,
+        translator: book.translator,
+        publisher: book.publisher,
+        pages: book.pages,
+        year: book.year,
+        hasToc: book.hasToc,
+      })),
+    };
   } catch {
     return { ok: false, message: SEARCH_FAILED };
   }
@@ -113,7 +129,8 @@ export async function pickBook(isbn: string): Promise<PickBookResult> {
     const [found] = await searchNlk(parsed.data);
     if (!found) return { ok: false, message: SEARCH_FAILED };
 
-    const toc = await fetchNlkToc(found.tocUrl);
+    // 응답에 목차 글이 있으면 그것을 쓰고, 없으면 목차 파일을 읽는다.
+    const toc = found.tocText ?? (await fetchNlkToc(found.tocUrl));
     return {
       ok: true,
       book: {

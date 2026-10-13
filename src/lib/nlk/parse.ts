@@ -7,6 +7,8 @@ const nlkDocSchema = z.object({
   PUBLISHER: z.string().optional().default(""),
   EA_ISBN: z.string().optional().default(""),
   PAGE: z.string().optional().default(""),
+  // 목차 글(주로 2021년 이후 책)과 목차 파일 주소(주로 2020년 이전 책). 둘 중 하나만 있는 경우가 많다.
+  BOOK_TB_CNT: z.string().optional().default(""),
   BOOK_TB_CNT_URL: z.string().optional().default(""),
   PUBLISH_PREDATE: z.string().optional().default(""),
 });
@@ -25,8 +27,12 @@ export type NlkBook = {
   publisher: string;
   pages: number | null;
   year: string;
+  // 응답에 바로 담겨 온 목차 글. 없으면 null
+  tocText: string | null;
   // 목차 파일 주소. 2021년 2월 이후 책은 대부분 비어 있다.
   tocUrl: string | null;
+  // 둘 중 하나라도 있으면 목차를 불러올 수 있다.
+  hasToc: boolean;
 };
 
 const ISBN = /^[0-9X]{10}([0-9]{3})?$/;
@@ -89,6 +95,8 @@ export function toNlkBooks(docs: NlkDoc[]): NlkBook[] {
     const title = doc.TITLE.trim();
     if (!ISBN.test(isbn) || !title || seen.has(isbn)) continue;
     seen.add(isbn);
+    const tocText = doc.BOOK_TB_CNT.trim() || null;
+    const tocUrl = safeTocUrl(doc.BOOK_TB_CNT_URL);
 
     books.push({
       isbn,
@@ -97,7 +105,9 @@ export function toNlkBooks(docs: NlkDoc[]): NlkBook[] {
       publisher: doc.PUBLISHER.trim(),
       pages: parsePages(doc.PAGE),
       year: doc.PUBLISH_PREDATE.slice(0, 4),
-      tocUrl: safeTocUrl(doc.BOOK_TB_CNT_URL),
+      tocText,
+      tocUrl,
+      hasToc: Boolean(tocText ?? tocUrl),
     });
   }
 
