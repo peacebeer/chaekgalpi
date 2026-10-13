@@ -33,9 +33,13 @@ export default function GroupPage({
   searchParams,
 }: PageProps<"/groups/[id]">) {
   return (
-    <main className="mx-auto flex w-full max-w-xl flex-1 flex-col gap-6 px-6 py-8">
+    <main className="flex w-full flex-1 flex-col">
       <Suspense
-        fallback={<p className="text-muted-foreground text-sm">불러오는 중…</p>}
+        fallback={
+          <p className="text-muted-foreground mx-auto w-full max-w-6xl px-4 py-8 text-sm sm:px-8">
+            불러오는 중…
+          </p>
+        }
       >
         <GroupDetail params={params} searchParams={searchParams} />
       </Suspense>
@@ -164,204 +168,229 @@ async function GroupDetail({
 
   return (
     <>
-      <header className="flex flex-col gap-1">
-        <h1 className="text-2xl font-semibold tracking-tight">{group.name}</h1>
-        <p className="text-sm">
-          <span className="font-medium">{book.title}</span>
-          <span className="text-muted-foreground">
-            {[book.author, book.translator && `${book.translator} 옮김`]
-              .filter(Boolean)
-              .map((text) => ` · ${text}`)
-              .join("")}
-          </span>
-        </p>
-      </header>
-
-      {!me && (
-        <>
-          <section className="flex flex-col gap-3 rounded-lg border p-4">
-            <p className="text-sm">
-              공개 그룹이에요. 정원은 {group.capacity}명이고, 입장하면 회원과
-              감상을 볼 수 있어요.
-            </p>
-            <JoinForm groupId={group.id} />
-          </section>
-          {bookInfo}
-          {tableOfContents}
-        </>
-      )}
-
-      {me && (
-        <>
-          <nav
-            aria-label="그룹 화면"
-            className="flex gap-1 overflow-x-auto border-b"
-          >
-            {TABS.map(([key, label]) => (
-              <Link
-                key={key}
-                href={
-                  key === "feed"
-                    ? `/groups/${group.id}`
-                    : `/groups/${group.id}?tab=${key}`
-                }
-                aria-current={tab === key ? "page" : undefined}
-                className={
-                  tab === key
-                    ? "border-foreground -mb-px shrink-0 border-b-2 px-3 py-2 text-sm font-medium whitespace-nowrap"
-                    : "text-muted-foreground hover:text-foreground -mb-px shrink-0 border-b-2 border-transparent px-3 py-2 text-sm whitespace-nowrap"
-                }
-              >
-                {label}
-              </Link>
-            ))}
-          </nav>
-
-          {tab === "feed" && (
-            <ExchangeSection
-              groupId={group.id}
-              userId={user.id}
-              isOwner={isOwner}
-              bookTitle={book.title}
-              chapters={chapterOptions}
-              wholeBook={wholeBook}
-              progress={{
-                chapter: me.progress_chapter,
-                pct: Number(me.progress_pct),
-                finished: Boolean(me.finished_at),
-              }}
-              nicknames={Object.fromEntries(
-                memberList.map((member) => [
-                  member.user_id,
-                  member.profiles?.nickname ?? "독자",
-                ]),
-              )}
-              progressForm={
-                <ProgressForm
-                  groupId={group.id}
-                  chapters={chapterOptions}
-                  wholeBook={wholeBook}
-                  canUsePages={chapters.every((chapter) => chapter.start_page)}
-                  initial={{
-                    chapter: me.progress_chapter,
-                    pct: Number(me.progress_pct),
-                    finished: Boolean(me.finished_at),
-                  }}
-                />
-              }
-            />
-          )}
-
-          {tab === "progress" && (
-            <section className="flex flex-col gap-3">
-              <h2 className="text-lg font-semibold">
-                진도 현황 · 회원 {memberList.length}/{group.capacity}명
-              </h2>
-              <ul className="flex flex-col gap-3">
-                {memberList.map((member) => {
-                  const position = {
-                    chapter: member.progress_chapter,
-                    pct: Number(member.progress_pct),
-                  };
-                  const finished = Boolean(member.finished_at);
-                  const percent = overallPercent(
-                    position,
-                    chapters.length,
-                    finished,
-                  );
-                  return (
-                    <li key={member.user_id} className="flex flex-col gap-1">
-                      <div className="flex items-baseline justify-between gap-3 text-sm">
-                        <span>
-                          {member.profiles?.nickname ?? "독자"}
-                          {member.role === "owner" ? " (리더)" : ""}
-                          {member.user_id === user.id ? " · 나" : ""}
-                        </span>
-                        <span className="text-muted-foreground tabular-nums">
-                          {positionLabel(position, wholeBook, finished)}
-                        </span>
-                      </div>
-                      <div
-                        role="progressbar"
-                        aria-label={`${member.profiles?.nickname ?? "독자"} 진도`}
-                        aria-valuemin={0}
-                        aria-valuemax={100}
-                        aria-valuenow={Math.round(percent)}
-                        className="bg-muted h-2 overflow-hidden rounded-full"
-                      >
-                        <div
-                          className="bg-foreground h-full rounded-full"
-                          style={{ width: `${percent}%` }}
-                        />
-                      </div>
-                    </li>
-                  );
-                })}
-              </ul>
+      <div className="bg-card border-b">
+        <div className="mx-auto flex w-full max-w-6xl flex-col gap-5 px-4 pt-6 sm:px-8">
+          <header className="flex items-center gap-4">
+            {/* 책등 모양 장식 */}
+            <div
+              aria-hidden
+              className="bg-primary text-primary-foreground flex h-[4.5rem] w-14 shrink-0 items-end rounded-sm p-1.5 text-[0.625rem] leading-tight"
+            >
+              <span className="line-clamp-3">{book.title}</span>
+            </div>
+            <div className="flex min-w-0 flex-col gap-0.5">
+              <h1 className="text-2xl font-semibold tracking-tight">
+                {group.name}
+              </h1>
               <p className="text-muted-foreground text-sm">
-                막대는 장마다 길이가 같다고 보고 어림한 값이에요.
+                {[
+                  book.title,
+                  book.author && `${book.author} 지음`,
+                  me && `회원 ${memberList.length}/${group.capacity}명`,
+                ]
+                  .filter(Boolean)
+                  .join(" · ")}
               </p>
+            </div>
+          </header>
+          {me ? (
+            <nav aria-label="그룹 화면" className="flex gap-1 overflow-x-auto">
+              {TABS.map(([key, label]) => (
+                <Link
+                  key={key}
+                  href={
+                    key === "feed"
+                      ? `/groups/${group.id}`
+                      : `/groups/${group.id}?tab=${key}`
+                  }
+                  aria-current={tab === key ? "page" : undefined}
+                  className={
+                    tab === key
+                      ? "border-primary shrink-0 border-b-[3px] px-4 py-2.5 text-sm font-semibold whitespace-nowrap"
+                      : "text-muted-foreground hover:text-foreground shrink-0 border-b-[3px] border-transparent px-4 py-2.5 text-sm whitespace-nowrap"
+                  }
+                >
+                  {label}
+                </Link>
+              ))}
+            </nav>
+          ) : (
+            <div className="pb-1" />
+          )}
+        </div>
+      </div>
+
+      <div
+        className={`mx-auto flex w-full flex-col gap-6 px-4 py-6 sm:px-8 ${
+          me && tab === "feed" ? "max-w-6xl" : "max-w-3xl"
+        }`}
+      >
+        {!me && (
+          <>
+            <section className="bg-card flex flex-col gap-3 rounded-xl border p-5">
+              <p className="text-sm">
+                공개 그룹이에요. 정원은 {group.capacity}명이고, 입장하면 회원과
+                감상을 볼 수 있어요.
+              </p>
+              <JoinForm groupId={group.id} />
             </section>
-          )}
+            {bookInfo}
+            {tableOfContents}
+          </>
+        )}
 
-          {tab === "book" && (
-            <>
-              {bookInfo}
-              {tableOfContents}
-            </>
-          )}
+        {me && (
+          <>
+            {tab === "feed" && (
+              <ExchangeSection
+                groupId={group.id}
+                userId={user.id}
+                isOwner={isOwner}
+                bookTitle={book.title}
+                chapters={chapterOptions}
+                wholeBook={wholeBook}
+                progress={{
+                  chapter: me.progress_chapter,
+                  pct: Number(me.progress_pct),
+                  finished: Boolean(me.finished_at),
+                }}
+                members={memberList.map((member) => ({
+                  id: member.user_id,
+                  nickname: member.profiles?.nickname ?? "독자",
+                  chapter: member.progress_chapter,
+                  pct: Number(member.progress_pct),
+                  finished: Boolean(member.finished_at),
+                  isMe: member.user_id === user.id,
+                }))}
+                progressForm={
+                  <ProgressForm
+                    groupId={group.id}
+                    chapters={chapterOptions}
+                    wholeBook={wholeBook}
+                    canUsePages={chapters.every(
+                      (chapter) => chapter.start_page,
+                    )}
+                    initial={{
+                      chapter: me.progress_chapter,
+                      pct: Number(me.progress_pct),
+                      finished: Boolean(me.finished_at),
+                    }}
+                  />
+                }
+              />
+            )}
 
-          {tab === "info" && (
-            <>
-              <section className="flex flex-col gap-2 text-sm">
-                <h2 className="text-lg font-semibold">그룹</h2>
-                <p>
-                  {group.is_public ? "공개 그룹" : "초대 전용 그룹"} · 정원{" "}
-                  {group.capacity}명{period ? ` · ${period}` : ""}
-                </p>
-                {isOwner && (
-                  <div className="flex flex-col gap-1 pt-1">
-                    <div>
-                      <Link
-                        href={`/groups/${group.id}/settings`}
-                        className={buttonVariants({ variant: "outline" })}
-                      >
-                        그룹 설정
-                      </Link>
-                    </div>
-                    <p className="text-muted-foreground">
-                      이름·정원·기간·공개 여부를 바꾸거나 회원을 관리하고 그룹을
-                      삭제할 수 있어요.
-                    </p>
-                  </div>
-                )}
-              </section>
-
+            {tab === "progress" && (
               <section className="flex flex-col gap-3">
-                <h2 className="text-lg font-semibold">초대 링크</h2>
-                <InviteLink code={group.invite_code} />
+                <h2 className="text-lg font-semibold">
+                  진도 현황 · 회원 {memberList.length}/{group.capacity}명
+                </h2>
+                <ul className="flex flex-col gap-3">
+                  {memberList.map((member) => {
+                    const position = {
+                      chapter: member.progress_chapter,
+                      pct: Number(member.progress_pct),
+                    };
+                    const finished = Boolean(member.finished_at);
+                    const percent = overallPercent(
+                      position,
+                      chapters.length,
+                      finished,
+                    );
+                    return (
+                      <li key={member.user_id} className="flex flex-col gap-1">
+                        <div className="flex items-baseline justify-between gap-3 text-sm">
+                          <span>
+                            {member.profiles?.nickname ?? "독자"}
+                            {member.role === "owner" ? " (리더)" : ""}
+                            {member.user_id === user.id ? " · 나" : ""}
+                          </span>
+                          <span className="text-muted-foreground tabular-nums">
+                            {positionLabel(position, wholeBook, finished)}
+                          </span>
+                        </div>
+                        <div
+                          role="progressbar"
+                          aria-label={`${member.profiles?.nickname ?? "독자"} 진도`}
+                          aria-valuemin={0}
+                          aria-valuemax={100}
+                          aria-valuenow={Math.round(percent)}
+                          className="bg-muted h-2 overflow-hidden rounded-full"
+                        >
+                          <div
+                            className="bg-foreground h-full rounded-full"
+                            style={{ width: `${percent}%` }}
+                          />
+                        </div>
+                      </li>
+                    );
+                  })}
+                </ul>
                 <p className="text-muted-foreground text-sm">
-                  이 링크를 받은 사람은 로그인한 뒤 그룹에 들어올 수 있어요.
+                  막대는 장마다 길이가 같다고 보고 어림한 값이에요.
                 </p>
               </section>
+            )}
 
-              {!isOwner && (
-                <section className="flex flex-col gap-2 border-t pt-6">
-                  <div>
-                    <ConfirmAction
-                      action={removeMember}
-                      fields={{ groupId: group.id, userId: user.id }}
-                      label="그룹 나가기"
-                      question="이 그룹에서 나갈까요? 내가 쓴 감상은 그룹에 남고, 진도 기록은 지워져요."
-                      confirmLabel="나가기"
-                    />
-                  </div>
+            {tab === "book" && (
+              <>
+                {bookInfo}
+                {tableOfContents}
+              </>
+            )}
+
+            {tab === "info" && (
+              <>
+                <section className="flex flex-col gap-2 text-sm">
+                  <h2 className="text-lg font-semibold">그룹</h2>
+                  <p>
+                    {group.is_public ? "공개 그룹" : "초대 전용 그룹"} · 정원{" "}
+                    {group.capacity}명{period ? ` · ${period}` : ""}
+                  </p>
+                  {isOwner && (
+                    <div className="flex flex-col gap-1 pt-1">
+                      <div>
+                        <Link
+                          href={`/groups/${group.id}/settings`}
+                          className={buttonVariants({ variant: "outline" })}
+                        >
+                          그룹 설정
+                        </Link>
+                      </div>
+                      <p className="text-muted-foreground">
+                        이름·정원·기간·공개 여부를 바꾸거나 회원을 관리하고
+                        그룹을 삭제할 수 있어요.
+                      </p>
+                    </div>
+                  )}
                 </section>
-              )}
-            </>
-          )}
-        </>
-      )}
+
+                <section className="flex flex-col gap-3">
+                  <h2 className="text-lg font-semibold">초대 링크</h2>
+                  <InviteLink code={group.invite_code} />
+                  <p className="text-muted-foreground text-sm">
+                    이 링크를 받은 사람은 로그인한 뒤 그룹에 들어올 수 있어요.
+                  </p>
+                </section>
+
+                {!isOwner && (
+                  <section className="flex flex-col gap-2 border-t pt-6">
+                    <div>
+                      <ConfirmAction
+                        action={removeMember}
+                        fields={{ groupId: group.id, userId: user.id }}
+                        label="그룹 나가기"
+                        question="이 그룹에서 나갈까요? 내가 쓴 감상은 그룹에 남고, 진도 기록은 지워져요."
+                        confirmLabel="나가기"
+                      />
+                    </div>
+                  </section>
+                )}
+              </>
+            )}
+          </>
+        )}
+      </div>
     </>
   );
 }

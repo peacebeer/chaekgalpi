@@ -14,6 +14,10 @@ import { NoteForm } from "@/components/exchange/note-form";
 import type { PickerProgress } from "@/components/exchange/position-picker";
 import { ToolPanels } from "@/components/exchange/tool-panels";
 import { ConfirmAction } from "@/components/groups/confirm-action";
+import {
+  ProgressLine,
+  type LineMember,
+} from "@/components/groups/progress-line";
 import { Button } from "@/components/ui/button";
 import { positionLabel } from "@/lib/books/progress";
 import {
@@ -34,15 +38,30 @@ type ExchangeSectionProps = {
   chapters: { number: number; title: string }[];
   wholeBook: boolean;
   progress: PickerProgress;
-  // 회원 id → 닉네임 (지금 그룹에 있는 회원만)
-  nicknames: Record<string, string>;
-  // "내 진도" 버튼을 누르면 펼쳐질 입력 칸
+  // 진도선에 찍을 회원들(지금 그룹에 있는 회원만)
+  members: LineMember[];
+  // "진도 기록" 버튼을 누르면 펼쳐질 입력 칸
   progressForm: ReactNode;
 };
 
 const FORMER_MEMBER = "나간 회원";
+const CARD = "bg-card rounded-xl border";
 
-// 교환 독서 화면의 본문: 접어 둔 보조 기능(내 진도, 글 남기기)과 인용·감상 목록.
+// 이름 첫 글자를 넣은 동그라미
+function Avatar({ name, small = false }: { name: string; small?: boolean }) {
+  return (
+    <span
+      aria-hidden
+      className={`bg-secondary text-secondary-foreground flex shrink-0 items-center justify-center rounded-full font-semibold ${
+        small ? "size-7 text-xs" : "size-9 text-sm"
+      }`}
+    >
+      {Array.from(name)[0] ?? "?"}
+    </span>
+  );
+}
+
+// 교환 독서 화면의 본문: 함께 읽는 진도와 목차(옆 칸), 글 남기기와 인용·감상 목록(가운데).
 // 여기서 읽는 행은 모두 RLS를 통과한 것(내 진도 이하)뿐이다. 잠긴 글은 개수만 따로 받는다.
 export async function ExchangeSection({
   groupId,
@@ -52,7 +71,7 @@ export async function ExchangeSection({
   chapters,
   wholeBook,
   progress,
-  nicknames,
+  members,
   progressForm,
 }: ExchangeSectionProps) {
   const supabase = await createClient();
@@ -122,95 +141,121 @@ export async function ExchangeSection({
   const chapterTitle = new Map(
     chapters.map((chapter) => [chapter.number, chapter.title]),
   );
-  const nameOf = (id: string | null) => (id && nicknames[id]) || FORMER_MEMBER;
+  const nicknames = new Map(
+    members.map((member) => [member.id, member.nickname]),
+  );
+  const nameOf = (id: string | null) =>
+    (id && nicknames.get(id)) || FORMER_MEMBER;
 
   const renderNote = (note: FeedNote, isReply = false) => {
     const liked = note.likedBy.includes(userId);
     const mine = note.authorId === userId;
+    const name = nameOf(note.authorId);
+    const tagged = note.kind === "question" || note.kind === "summary";
+
     return (
       <li
         key={note.id}
         id={`note-${note.id}`}
         className={
           isReply
-            ? "scroll-mt-4 border-l pl-3"
-            : "flex scroll-mt-4 flex-col gap-2"
+            ? "bg-background flex scroll-mt-4 gap-2.5 rounded-lg p-3"
+            : "flex scroll-mt-4 gap-3"
         }
       >
-        <div className="flex flex-col gap-1">
-          <p className="text-muted-foreground text-sm">
-            {nameOf(note.authorId)}
-            {isReply ? " · 답글" : ` · ${kindLabel(note.kind)}`}
-            {note.hidden ? " · 리더가 숨긴 글(다른 회원에게는 안 보여요)" : ""}
+        <Avatar name={name} small={isReply} />
+        <div className="flex min-w-0 flex-1 flex-col gap-2">
+          <p className="text-muted-foreground flex flex-wrap items-center gap-x-2 text-sm">
+            <span className="text-foreground font-semibold">{name}</span>
+            {isReply ? (
+              <span>답글</span>
+            ) : (
+              <span
+                className={
+                  tagged
+                    ? "bg-highlight text-highlight-foreground rounded-md px-2"
+                    : undefined
+                }
+              >
+                {kindLabel(note.kind)}
+              </span>
+            )}
+            {note.hidden && (
+              <span>리더가 숨긴 글(다른 회원에게는 안 보여요)</span>
+            )}
           </p>
           <p className="leading-7 whitespace-pre-wrap">{note.body}</p>
-        </div>
 
-        <div className="flex flex-wrap items-center gap-2">
-          <form action={toggleLike}>
-            <input type="hidden" name="noteId" value={note.id} />
-            <input type="hidden" name="liked" value={String(liked)} />
-            <Button
-              type="submit"
-              size="sm"
-              variant={liked ? "default" : "outline"}
-              aria-pressed={liked}
-              aria-label={liked ? "좋아요 취소" : "좋아요"}
-            >
-              ♥ {note.likedBy.length}
-            </Button>
-          </form>
-          {note.likedBy.length > 0 && (
-            <span className="text-muted-foreground text-sm">
-              {note.likedBy.map((id) => nameOf(id)).join(", ")}
-            </span>
-          )}
-          {!isReply && (
-            <NoteForm
-              groupId={groupId}
-              target={{ parentId: note.id }}
-              label="답글"
-              placeholder="답글을 적어 주세요"
-            />
-          )}
-          {mine && (
-            <>
-              <EditForm
-                action={updateNote}
-                fields={{ noteId: note.id }}
-                name="body"
-                initial={note.body}
-                label="수정"
-              />
-              <ConfirmAction
-                action={deleteNote}
-                fields={{ noteId: note.id }}
-                label="삭제"
-                question={
-                  note.replies.length > 0
-                    ? `이 글을 지울까요? 달린 답글 ${note.replies.length}개도 함께 지워져요.`
-                    : "이 글을 지울까요? 되돌릴 수 없어요."
-                }
-                confirmLabel="삭제"
-              />
-            </>
-          )}
-          {isOwner && (
-            <form action={setNoteHidden}>
+          <div className="flex flex-wrap items-center gap-2">
+            <form action={toggleLike}>
               <input type="hidden" name="noteId" value={note.id} />
-              <input type="hidden" name="hidden" value={String(!note.hidden)} />
-              <Button type="submit" size="sm" variant="ghost">
-                {note.hidden ? "다시 보이기" : "숨기기"}
+              <input type="hidden" name="liked" value={String(liked)} />
+              <Button
+                type="submit"
+                size="sm"
+                variant={liked ? "default" : "outline"}
+                aria-pressed={liked}
+                aria-label={liked ? "좋아요 취소" : "좋아요"}
+              >
+                ♥ {note.likedBy.length}
               </Button>
             </form>
+            {note.likedBy.length > 0 && (
+              <span className="text-muted-foreground text-sm">
+                {note.likedBy.map((id) => nameOf(id)).join(", ")}
+              </span>
+            )}
+            {!isReply && (
+              <NoteForm
+                groupId={groupId}
+                target={{ parentId: note.id }}
+                label="답글"
+                placeholder="답글을 적어 주세요"
+              />
+            )}
+            {mine && (
+              <>
+                <EditForm
+                  action={updateNote}
+                  fields={{ noteId: note.id }}
+                  name="body"
+                  initial={note.body}
+                  label="수정"
+                />
+                <ConfirmAction
+                  action={deleteNote}
+                  fields={{ noteId: note.id }}
+                  label="삭제"
+                  question={
+                    note.replies.length > 0
+                      ? `이 글을 지울까요? 달린 답글 ${note.replies.length}개도 함께 지워져요.`
+                      : "이 글을 지울까요? 되돌릴 수 없어요."
+                  }
+                  confirmLabel="삭제"
+                />
+              </>
+            )}
+            {isOwner && (
+              <form action={setNoteHidden}>
+                <input type="hidden" name="noteId" value={note.id} />
+                <input
+                  type="hidden"
+                  name="hidden"
+                  value={String(!note.hidden)}
+                />
+                <Button type="submit" size="sm" variant="ghost">
+                  {note.hidden ? "다시 보이기" : "숨기기"}
+                </Button>
+              </form>
+            )}
+          </div>
+
+          {note.replies.length > 0 && (
+            <ul className="flex flex-col gap-2 pt-1">
+              {note.replies.map((reply) => renderNote(reply, true))}
+            </ul>
           )}
         </div>
-
-        {note.replies.length > 0 && (
-          <ul className="flex flex-col gap-3 pt-1">
-            {note.replies.map((reply) => renderNote(reply, true))}
-          </ul>
-        )}
       </li>
     );
   };
@@ -223,9 +268,9 @@ export async function ExchangeSection({
 
     if (thread.type === "note") {
       return (
-        <li key={thread.id} className="rounded-lg border p-4">
-          <p className="text-muted-foreground mb-2 text-sm">{where}</p>
-          <ul className="flex flex-col gap-4">{renderNote(thread.note)}</ul>
+        <li key={thread.id} className={`${CARD} flex flex-col gap-3 p-5`}>
+          <p className="text-muted-foreground text-sm">{where}</p>
+          <ul className="flex flex-col gap-5">{renderNote(thread.note)}</ul>
         </li>
       );
     }
@@ -242,15 +287,26 @@ export async function ExchangeSection({
       <li
         key={thread.id}
         id={`quote-${thread.id}`}
-        className="flex scroll-mt-4 flex-col gap-4 rounded-lg border p-4"
+        className={`${CARD} scroll-mt-4 overflow-hidden`}
       >
-        <figure className="flex flex-col gap-2">
-          <blockquote className="border-l-2 pl-3 leading-7 whitespace-pre-wrap">
+        <figure className="bg-accent flex flex-col gap-3 px-6 pt-5 pb-6">
+          <figcaption className="flex flex-wrap items-center gap-x-2 gap-y-1 text-sm">
+            <span className="bg-primary text-primary-foreground rounded-md px-2">
+              인용
+            </span>
+            <span>
+              『{bookTitle}』 {where} · {nameOf(thread.createdBy)} 님이 옮김
+            </span>
+          </figcaption>
+          <span
+            aria-hidden
+            className="font-quote text-primary -mb-3 h-7 text-6xl leading-none select-none"
+          >
+            “
+          </span>
+          <blockquote className="font-quote text-xl leading-loose whitespace-pre-wrap sm:text-[1.375rem]">
             {thread.text}
           </blockquote>
-          <figcaption className="text-muted-foreground text-sm">
-            『{bookTitle}』 {where} · {nameOf(thread.createdBy)} 님이 옮김
-          </figcaption>
           {(isCreator || isOwner) && (
             <div className="flex flex-wrap items-start gap-2">
               <EditForm
@@ -288,96 +344,174 @@ export async function ExchangeSection({
             </div>
           )}
         </figure>
-        <ul className="flex flex-col gap-4">
-          {thread.notes.map((note) => renderNote(note))}
-        </ul>
-        <div>
-          <NoteForm
-            groupId={groupId}
-            target={{ quoteId: thread.id }}
-            label="이 문장에 감상 남기기"
-            placeholder="이 문장을 읽고 든 생각"
-          />
+        <div className="flex flex-col gap-5 px-6 py-5">
+          <ul className="flex flex-col gap-5">
+            {thread.notes.map((note) => renderNote(note))}
+          </ul>
+          <div>
+            <NoteForm
+              groupId={groupId}
+              target={{ quoteId: thread.id }}
+              label="이 문장에 감상 남기기"
+              placeholder="이 문장을 읽고 든 생각"
+            />
+          </div>
         </div>
       </li>
     );
   };
 
   return (
-    <>
-      <ToolPanels
-        panels={[
-          {
-            id: "progress",
-            label: `내 진도 · ${positionLabel(progress, wholeBook, progress.finished)}`,
-            content: progressForm,
-          },
-          {
-            id: "compose",
-            label: "글 남기기",
-            content: (
-              <Composer
-                // 진도를 저장하면 고를 수 있는 위치가 달라지므로 새로 만든다.
-                key={`${progress.chapter}-${progress.pct}-${progress.finished}`}
-                groupId={groupId}
-                chapters={chapters}
-                wholeBook={wholeBook}
-                progress={progress}
-                quota={quota}
-              />
-            ),
-          },
-        ]}
-      />
+    <div className="flex flex-col gap-6 lg:flex-row lg:items-start">
+      <aside className="flex flex-col gap-4 lg:sticky lg:top-6 lg:w-80 lg:shrink-0">
+        <section className={`${CARD} flex flex-col gap-4 p-5`}>
+          <h2 className="text-muted-foreground text-sm font-semibold">
+            함께 읽는 진도
+          </h2>
+          <ProgressLine
+            members={members}
+            chapterCount={chapters.length}
+            wholeBook={wholeBook}
+          />
+          <ToolPanels
+            panels={[
+              { id: "progress", label: "내 진도 기록", content: progressForm },
+            ]}
+          />
+        </section>
 
-      <section className="flex flex-col gap-6">
-        <h2 className="sr-only">인용과 감상</h2>
-        {sectionKeys.length === 0 && (
-          <p className="text-muted-foreground text-sm">
-            아직 글이 없어요. 위의 &ldquo;글 남기기&rdquo;로 마음에 남은
-            문장이나 생각을 처음으로 남겨 보세요.
-          </p>
-        )}
-        {sectionKeys.map((chapter) => {
-          const threads = threadsByChapter.get(chapter) ?? [];
-          const lockedHere = lockedByChapter.get(chapter);
-          const heading =
-            chapter === null
-              ? "책 전체"
-              : wholeBook
-                ? "책 전체 흐름"
-                : `${chapter}장 ${chapterTitle.get(chapter) ?? ""}`.trim();
+        {!wholeBook && (
+          <nav aria-label="목차" className={`${CARD} flex flex-col gap-1 p-3`}>
+            <h2 className="text-muted-foreground px-2 py-1.5 text-sm font-semibold">
+              목차
+            </h2>
+            {chapters.map((chapter) => {
+              const open = threadsByChapter.get(chapter.number)?.length ?? 0;
+              const lockedHere = lockedByChapter.get(chapter.number);
+              const lockedTotal = lockedHere
+                ? lockedHere.quotes + lockedHere.notes
+                : 0;
+              const current = chapter.number === progress.chapter;
+              const label = (
+                <>
+                  <span className="min-w-0 truncate">
+                    <span className="mr-1.5 tabular-nums">
+                      {chapter.number}
+                    </span>
+                    {chapter.title}
+                  </span>
+                  <span className="shrink-0 text-xs tabular-nums">
+                    {open > 0 ? `글 ${open}` : ""}
+                    {open > 0 && lockedTotal > 0 ? " · " : ""}
+                    {lockedTotal > 0 ? `잠김 ${lockedTotal}` : ""}
+                  </span>
+                </>
+              );
+              const rowClass = `flex items-center justify-between gap-3 rounded-md px-2 py-2 text-sm ${
+                current ? "bg-accent font-medium" : ""
+              }`;
 
-          return (
-            <div key={chapter ?? "whole"} className="flex flex-col gap-3">
-              <h3 className="font-medium">{heading}</h3>
-              {threads.length > 0 && (
-                <ul className="flex flex-col gap-3">
-                  {threads.map((thread) => renderThread(thread, chapter))}
-                </ul>
-              )}
-              {lockedHere && (
-                <div
-                  className="relative overflow-hidden rounded-lg border p-4"
-                  data-locked
+              // 글이 있는 장만 그 자리로 건너뛸 수 있다.
+              return open > 0 || lockedTotal > 0 ? (
+                <a
+                  key={chapter.number}
+                  href={`#chapter-${chapter.number}`}
+                  aria-current={current ? "location" : undefined}
+                  className={`${rowClass} hover:bg-accent`}
                 >
-                  {/* 흐린 줄은 장식이다. 잠긴 글의 내용은 서버에서도 받지 않는다. */}
-                  <div aria-hidden className="flex flex-col gap-2 blur-sm">
-                    <div className="bg-muted h-3 w-11/12 rounded" />
-                    <div className="bg-muted h-3 w-8/12 rounded" />
-                    <div className="bg-muted h-3 w-10/12 rounded" />
-                  </div>
-                  <p className="mt-3 text-sm">
-                    {chapter === null
-                      ? `완독하면 열리는 글: ${lockedLabel(lockedHere)}`
-                      : `아직 읽지 않은 곳에 ${lockedLabel(lockedHere)}가 있어요. 진도가 닿으면 열려요.`}
-                  </p>
+                  {label}
+                </a>
+              ) : (
+                <div
+                  key={chapter.number}
+                  className={`${rowClass} text-muted-foreground`}
+                >
+                  {label}
                 </div>
-              )}
-            </div>
-          );
-        })}
-      </section>
-    </>
+              );
+            })}
+          </nav>
+        )}
+      </aside>
+
+      <div className="flex min-w-0 flex-1 flex-col gap-6">
+        <div className={`${CARD} p-4`}>
+          <ToolPanels
+            panels={[
+              {
+                id: "compose",
+                label: "글 남기기",
+                content: (
+                  <Composer
+                    // 진도를 저장하면 고를 수 있는 위치가 달라지므로 새로 만든다.
+                    key={`${progress.chapter}-${progress.pct}-${progress.finished}`}
+                    groupId={groupId}
+                    chapters={chapters}
+                    wholeBook={wholeBook}
+                    progress={progress}
+                    quota={quota}
+                  />
+                ),
+              },
+            ]}
+            hint="마음에 남은 문장이나 생각을 남겨 보세요."
+          />
+        </div>
+
+        <section className="flex flex-col gap-8">
+          <h2 className="sr-only">인용과 감상</h2>
+          {sectionKeys.length === 0 && (
+            <p className="text-muted-foreground text-sm">
+              아직 글이 없어요. 위의 &ldquo;글 남기기&rdquo;로 마음에 남은
+              문장이나 생각을 처음으로 남겨 보세요.
+            </p>
+          )}
+          {sectionKeys.map((chapter) => {
+            const threads = threadsByChapter.get(chapter) ?? [];
+            const lockedHere = lockedByChapter.get(chapter);
+            const heading =
+              chapter === null
+                ? "책 전체"
+                : wholeBook
+                  ? "책 전체 흐름"
+                  : `${chapter}장 ${chapterTitle.get(chapter) ?? ""}`.trim();
+
+            return (
+              <div key={chapter ?? "whole"} className="flex flex-col gap-3">
+                <h3
+                  id={chapter === null ? "chapter-whole" : `chapter-${chapter}`}
+                  className="text-muted-foreground scroll-mt-4 text-sm font-semibold"
+                >
+                  {heading}
+                </h3>
+                {threads.length > 0 && (
+                  <ul className="flex flex-col gap-4">
+                    {threads.map((thread) => renderThread(thread, chapter))}
+                  </ul>
+                )}
+                {lockedHere && (
+                  <div
+                    className="border-input flex flex-col gap-3 rounded-xl border border-dashed p-5"
+                    data-locked
+                  >
+                    {/* 흐린 줄은 장식이다. 잠긴 글의 내용은 서버에서도 받지 않는다. */}
+                    <div aria-hidden className="flex flex-col gap-2 blur-[2px]">
+                      <div className="bg-muted h-3 w-11/12 rounded" />
+                      <div className="bg-muted h-3 w-8/12 rounded" />
+                      <div className="bg-muted h-3 w-10/12 rounded" />
+                    </div>
+                    <p className="text-sm">
+                      {chapter === null
+                        ? `완독하면 열리는 글: ${lockedLabel(lockedHere)}`
+                        : `아직 읽지 않은 곳에 ${lockedLabel(lockedHere)}가 있어요. 진도가 닿으면 열려요.`}
+                    </p>
+                  </div>
+                )}
+              </div>
+            );
+          })}
+        </section>
+      </div>
+    </div>
   );
 }
