@@ -51,18 +51,18 @@ export function NotificationList({
   }
 
   return (
-    <ul className="divide-y rounded-lg border">
+    <ul className="bg-card divide-y overflow-hidden rounded-xl border">
       {items.map((item) => {
         const isNew = Number.isNaN(seen) || Date.parse(item.at) > seen;
         return (
           <li key={item.id}>
             <Link
               href={item.href}
-              className="hover:bg-muted flex flex-col gap-1 px-3 py-3"
+              className="hover:bg-accent flex flex-col gap-1 px-3 py-3"
             >
               <span className="flex items-center gap-2 text-sm">
                 {isNew && (
-                  <span className="bg-foreground text-background rounded-full px-2 py-0.5 text-xs font-medium">
+                  <span className="bg-primary text-primary-foreground rounded-md px-1.5 py-0.5 text-xs font-medium">
                     새 소식
                   </span>
                 )}

@@ -18,7 +18,7 @@ export const metadata: Metadata = { title: "알림 · 책갈피" };
 
 export default function NotificationsPage() {
   return (
-    <main className="mx-auto flex w-full max-w-xl flex-1 flex-col gap-6 px-6 py-10">
+    <main className="mx-auto flex w-full max-w-3xl flex-1 flex-col gap-6 px-4 py-8 sm:px-8">
       <h1 className="text-2xl font-semibold tracking-tight">알림</h1>
       <Suspense
         fallback={<p className="text-muted-foreground text-sm">불러오는 중…</p>}

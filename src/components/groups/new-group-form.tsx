@@ -197,7 +197,7 @@ export function NewGroupForm() {
               aria-current={current ? "step" : undefined}
               className={
                 current
-                  ? "bg-foreground text-background rounded-full px-3 py-1"
+                  ? "bg-primary text-primary-foreground rounded-full px-3 py-1"
                   : "text-muted-foreground bg-muted rounded-full px-3 py-1"
               }
             >

@@ -143,7 +143,7 @@ async function GroupDetail({
       {book.cover_url && (
         <BookCover url={book.cover_url} title={book.title} size="lg" />
       )}
-      <dl className="divide-y rounded-lg border text-sm">
+      <dl className="bg-card divide-y rounded-xl border text-sm">
         {bookFacts.map(([label, value]) => (
           <div key={label} className="flex gap-3 px-3 py-2">
             <dt className="text-muted-foreground w-24 shrink-0">{label}</dt>
@@ -168,7 +168,7 @@ async function GroupDetail({
         </p>
       ) : (
         <>
-          <ol className="divide-y rounded-lg border">
+          <ol className="bg-card divide-y rounded-xl border">
             {chapters.map((chapter) => (
               <li
                 key={chapter.number}
