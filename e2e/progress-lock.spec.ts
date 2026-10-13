@@ -38,6 +38,14 @@ async function saveProgress(page: Page, chapter: string, pct: number) {
   await expect(panel.getByText("진도를 저장했어요")).toBeVisible();
 }
 
+// 테스트가 만든 그룹을 지운다(회원·카드·감상도 함께 지워진다). 리더로 로그인한 화면에서 부른다.
+async function deleteGroup(page: Page, groupPath: string) {
+  await page.goto(`${groupPath}/settings`);
+  await page.getByRole("button", { name: "그룹 삭제" }).click();
+  await page.getByRole("button", { name: "영구 삭제" }).click();
+  await page.waitForURL(/\/groups$/);
+}
+
 test.describe("진도 잠금 흐름", () => {
   test.skip(
     !accounts,
@@ -54,6 +62,12 @@ test.describe("진도 잠금 흐름", () => {
     const quoteText = `E2E 인용문 ${tag} 아무도 모르는 2장의 문장`;
     const noteText = `E2E 감상 ${tag}`;
 
+    // 돌릴 때마다 책이 쌓이지 않도록 정해 둔 가짜 ISBN의 책 한 권을 다시 쓴다.
+    // (책은 지울 권한이 없게 설계돼 있어 테스트가 치울 수 없다.)
+    const isbn =
+      testInfo.project.name === "mobile" ? "9790000000011" : "9790000000028";
+    let groupPath: string | null = null;
+
     const contextA = await browser.newContext();
     const contextB = await browser.newContext();
     const pageA = await contextA.newPage();
@@ -66,19 +80,38 @@ test.describe("진도 잠금 흐름", () => {
       // A: 목차 3장짜리 책으로 그룹을 만든다 -------------------------------------
       await pageA.goto("/groups/new");
       await pageA.getByRole("button", { name: "검색 없이 직접 입력" }).click();
-      await pageA.getByLabel("책 제목").fill(`E2E 책 ${tag}`);
+      await pageA
+        .getByLabel("책 제목")
+        .fill(`E2E 책 (${testInfo.project.name})`);
+      await pageA.getByLabel("ISBN (선택)").fill(isbn);
       await pageA.getByLabel(/^목차/).fill("처음\n가운데\n끝");
       await pageA.getByRole("button", { name: "다음" }).click();
       await pageA.getByLabel("그룹 이름").fill(groupName);
       await pageA.getByRole("button", { name: "그룹 만들기" }).click();
-      await expect(
-        pageA.getByRole("heading", { level: 1, name: groupName }),
-      ).toBeVisible();
+
+      // 두 번째 실행부터는 같은 ISBN의 책이 이미 있어 되묻는다. 등록된 책을 그대로 쓴다.
+      const created = pageA.getByRole("heading", { level: 1, name: groupName });
+      const reuse = pageA.getByRole("button", {
+        name: "등록된 목차 그대로 쓰기",
+      });
+      await expect(created.or(reuse)).toBeVisible();
+      if (await reuse.isVisible()) {
+        await reuse.click();
+        await expect(pageA.getByLabel("책 제목")).toHaveAttribute("readonly");
+        await pageA.getByRole("button", { name: "다음" }).click();
+        await pageA.getByRole("button", { name: "그룹 만들기" }).click();
+      }
+      await expect(created).toBeVisible();
+      await pageA.waitForURL(/\/groups\/[0-9a-f-]{36}$/);
       const groupUrl = new URL(pageA.url()).pathname;
+      groupPath = groupUrl;
 
       // A: 초대 링크를 얻는다 ------------------------------------------------------
       await pageA.getByRole("link", { name: "그룹 정보" }).click();
-      const inviteLink = await pageA.getByLabel("초대 링크").inputValue();
+      await pageA.waitForURL(/tab=info/);
+      const inviteLink = await pageA
+        .getByRole("textbox", { name: "초대 링크" })
+        .inputValue();
       expect(inviteLink).toMatch(/\/join\/[0-9a-f]{10}$/);
 
       // B: 초대 링크로 입장한다 (진도는 1장 0%에서 시작) ------------------------------
@@ -116,16 +149,11 @@ test.describe("진도 잠금 흐름", () => {
       await expect(pageB.getByText(noteText)).toBeVisible();
       await expect(pageB.locator("[data-locked]")).toHaveCount(0);
     } finally {
-      // 정리: 만든 그룹을 지운다(회원·카드·감상도 함께 지워진다).
-      if (pageA.url().includes("/groups/")) {
-        const settingsUrl = `${new URL(pageA.url()).pathname.replace(/\/settings$/, "")}/settings`;
-        await pageA.goto(settingsUrl);
-        const remove = pageA.getByRole("button", { name: "그룹 삭제" });
-        if (await remove.isVisible().catch(() => false)) {
-          await remove.click();
-          await pageA.getByRole("button", { name: "영구 삭제" }).click();
-          await pageA.waitForURL(/\/groups$/);
-        }
+      // 실패해도 만든 그룹은 남기지 않는다. 정리 실패가 원래 오류를 가리지 않게 한다.
+      if (groupPath) {
+        await deleteGroup(pageA, groupPath).catch((error) => {
+          console.warn(`E2E 그룹을 지우지 못했다: ${groupPath}`, error);
+        });
       }
       await contextA.close();
       await contextB.close();
