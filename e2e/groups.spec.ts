@@ -30,3 +30,13 @@ test("첫 화면에서 그룹 만들기로 갈 수 있다", async ({ page }) => 
   await page.getByRole("link", { name: "그룹 만들기" }).click();
   await expect(page).toHaveURL(/\/login\?next=%2Fgroups%2Fnew$/);
 });
+
+test("로그인하지 않고 그룹 설정에 가면 로그인 화면으로 보낸다", async ({
+  page,
+}) => {
+  const path = "/groups/7b0b7a52-3d5e-4c1b-9a51-0d6f3e2a1c11/settings";
+  await page.goto(path);
+  await expect(page).toHaveURL(
+    new RegExp(`/login\\?next=${encodeURIComponent(path)}$`),
+  );
+});

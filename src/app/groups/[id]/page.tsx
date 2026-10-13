@@ -1,12 +1,17 @@
 import type { Metadata } from "next";
+import Link from "next/link";
 import { notFound } from "next/navigation";
 import { Suspense } from "react";
 
+import { ConfirmAction } from "@/components/groups/confirm-action";
 import { InviteLink } from "@/components/groups/invite-link";
 import { JoinForm } from "@/components/groups/join-form";
+import { buttonVariants } from "@/components/ui/button";
 import { requireUser } from "@/lib/auth/session";
 import { createClient } from "@/lib/supabase/server";
 import { uuidSchema } from "@/lib/validation/common";
+
+import { removeMember } from "./settings/actions";
 
 export const metadata: Metadata = { title: "그룹 · 책갈피" };
 
@@ -51,6 +56,7 @@ async function GroupDetail({
 
   const memberList = members ?? [];
   const isMember = memberList.some((member) => member.user_id === user.id);
+  const isOwner = group.owner_id === user.id;
   const book = group.books;
   const chapters = [...book.book_chapters].sort((a, b) => a.number - b.number);
   const period = [group.start_date, group.target_date].some(Boolean)
@@ -64,7 +70,19 @@ async function GroupDetail({
           {group.is_public ? "공개 그룹" : "초대 전용 그룹"}
           {period ? ` · ${period}` : ""}
         </p>
-        <h1 className="text-2xl font-semibold tracking-tight">{group.name}</h1>
+        <div className="flex items-start justify-between gap-3">
+          <h1 className="text-2xl font-semibold tracking-tight">
+            {group.name}
+          </h1>
+          {isOwner && (
+            <Link
+              href={`/groups/${group.id}/settings`}
+              className={buttonVariants({ variant: "outline", size: "sm" })}
+            >
+              그룹 설정
+            </Link>
+          )}
+        </div>
         <p>
           <span className="font-medium">{book.title}</span>
           <span className="text-muted-foreground">
@@ -147,6 +165,20 @@ async function GroupDetail({
           장으로 맞춰 주세요.
         </p>
       </section>
+
+      {isMember && !isOwner && (
+        <section className="flex flex-col gap-2 border-t pt-6">
+          <div>
+            <ConfirmAction
+              action={removeMember}
+              fields={{ groupId: group.id, userId: user.id }}
+              label="그룹 나가기"
+              question="이 그룹에서 나갈까요? 내가 쓴 감상은 그룹에 남고, 진도 기록은 지워져요."
+              confirmLabel="나가기"
+            />
+          </div>
+        </section>
+      )}
     </>
   );
 }
