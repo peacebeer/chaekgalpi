@@ -3,6 +3,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { Suspense } from "react";
 
+import { ExchangeSection } from "@/components/exchange/exchange-section";
 import { ConfirmAction } from "@/components/groups/confirm-action";
 import { InviteLink } from "@/components/groups/invite-link";
 import { JoinForm } from "@/components/groups/join-form";
@@ -135,6 +136,31 @@ async function GroupDetail({
                 }}
               />
             </section>
+          )}
+
+          {me && (
+            <ExchangeSection
+              groupId={group.id}
+              userId={user.id}
+              isOwner={isOwner}
+              bookTitle={book.title}
+              chapters={chapters.map(({ number, title }) => ({
+                number,
+                title,
+              }))}
+              wholeBook={wholeBook}
+              progress={{
+                chapter: me.progress_chapter,
+                pct: Number(me.progress_pct),
+                finished: Boolean(me.finished_at),
+              }}
+              nicknames={Object.fromEntries(
+                memberList.map((member) => [
+                  member.user_id,
+                  member.profiles?.nickname ?? "독자",
+                ]),
+              )}
+            />
           )}
 
           <section className="flex flex-col gap-3">
