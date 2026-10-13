@@ -38,11 +38,64 @@ describe("parseChapterLines", () => {
     ]);
   });
 
-  test("공백 한 칸 뒤의 숫자는 제목의 일부로 둔다", () => {
-    expect(parseChapterLines("1984 1\n제2차 세계대전 1939")).toEqual([
-      { number: 1, title: "1984 1", startPage: null },
-      { number: 2, title: "제2차 세계대전 1939", startPage: null },
+  const pairs = (text: string) =>
+    parseChapterLines(text).map((chapter) => [
+      chapter.title,
+      chapter.startPage,
     ]);
+
+  test("쪽수에 p·쪽 같은 단위가 붙어도 읽는다", () => {
+    expect(
+      pairs(
+        "어린 새 130p\n검은 숨 145쪽\n일곱 개의 뺨 p.173\n쇠와 피 | 201p\n밤의 눈동자  230 쪽",
+      ),
+    ).toEqual([
+      ["어린 새", 130],
+      ["검은 숨", 145],
+      ["일곱 개의 뺨", 173],
+      ["쇠와 피", 201],
+      ["밤의 눈동자", 230],
+    ]);
+  });
+
+  test("모든 줄이 커지는 숫자로 끝나면 | 없이도 쪽수로 읽는다", () => {
+    expect(pairs("어린 새 7\n검은 숨 45\n일곱 개의 뺨 73")).toEqual([
+      ["어린 새", 7],
+      ["검은 숨", 45],
+      ["일곱 개의 뺨", 73],
+    ]);
+  });
+
+  test("1씩 늘어나는 숫자는 장 번호로 보고 제목에 남긴다", () => {
+    expect(pairs("챕터 1\n챕터 2\n챕터 3")).toEqual([
+      ["챕터 1", null],
+      ["챕터 2", null],
+      ["챕터 3", null],
+    ]);
+  });
+
+  test("숫자가 없는 줄이 섞이거나 작아지면 제목에 남긴다", () => {
+    expect(pairs("프롤로그\n어린 새 7\n검은 숨 45")).toEqual([
+      ["프롤로그", null],
+      ["어린 새 7", null],
+      ["검은 숨 45", null],
+    ]);
+    expect(pairs("서울 1988\n부산 1950")).toEqual([
+      ["서울 1988", null],
+      ["부산 1950", null],
+    ]);
+  });
+
+  test("|를 쓴 줄이 있으면 나머지 줄의 숫자는 추측하지 않는다", () => {
+    expect(pairs("1984 1\n제2차 세계대전 1939\n맺음말 | 250")).toEqual([
+      ["1984 1", null],
+      ["제2차 세계대전 1939", null],
+      ["맺음말", 250],
+    ]);
+  });
+
+  test("숫자로 끝나는 줄이 하나뿐이면 제목에 남긴다", () => {
+    expect(pairs("1984 1")).toEqual([["1984 1", null]]);
   });
 
   test("빈 입력은 빈 목록이다", () => {
@@ -77,5 +130,23 @@ describe("wholeBookChapters", () => {
   test("직접 적은 목차는 책 전체로 보지 않는다", () => {
     expect(isWholeBook(parseChapterLines("1장 나\n2장 그녀"))).toBe(false);
     expect(isWholeBook(parseChapterLines("프롤로그"))).toBe(false);
+  });
+});
+
+describe("화면에 안내하는 시작 쪽 표기", () => {
+  test("안내한 형식은 모두 같은 장과 쪽수로 읽힌다", () => {
+    for (const line of [
+      "어린 새 | 7",
+      "어린 새 7p",
+      "어린 새 7쪽",
+      "어린 새 p.7",
+    ]) {
+      expect(parseChapterLines(line)).toEqual([
+        { number: 1, title: "어린 새", startPage: 7 },
+      ]);
+    }
+    expect(parseChapterLines("어린 새")).toEqual([
+      { number: 1, title: "어린 새", startPage: null },
+    ]);
   });
 });

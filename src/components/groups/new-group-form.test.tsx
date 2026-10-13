@@ -91,3 +91,23 @@ describe("그룹 만들기 단계", () => {
     expect(heading("1. 함께 읽을 책 찾기")).not.toBeNull();
   });
 });
+
+describe("목차 미리 보기", () => {
+  test("적은 목차가 어떻게 저장될지 장 제목과 쪽수로 보여 준다", () => {
+    render(<NewGroupForm />);
+    fireEvent.click(
+      screen.getByRole("button", { name: "검색 없이 직접 입력" }),
+    );
+    expect(screen.queryByRole("list", { name: "목차 미리 보기" })).toBeNull();
+
+    fireEvent.change(screen.getByLabelText(/^목차/), {
+      target: { value: "어린 새 130p\n검은 숨" },
+    });
+
+    const preview = screen.getByRole("list", { name: "목차 미리 보기" });
+    expect(preview.textContent).toContain("어린 새");
+    expect(preview.textContent).toContain("130쪽");
+    expect(preview.textContent).toContain("쪽수 없음");
+    expect(screen.getByText(/이렇게 저장돼요 \(2개 장\)/)).toBeDefined();
+  });
+});

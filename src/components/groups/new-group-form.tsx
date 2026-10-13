@@ -35,6 +35,15 @@ const INITIAL_GROUP = {
   isPublic: false,
 };
 
+// 목차 칸 아래에 보여 주는 시작 쪽 표기 예시. lib/books/chapters.ts가 읽는 형식과 맞춘다.
+const PAGE_FORMATS = [
+  ["어린 새 | 7", "제목 뒤에 | 와 쪽수"],
+  ["어린 새 7p", "쪽수 뒤에 p"],
+  ["어린 새 7쪽", "쪽수 뒤에 쪽"],
+  ["어린 새 p.7", "쪽수 앞에 p."],
+  ["어린 새", "쪽수 없이 제목만"],
+] as const;
+
 const STEPS = ["책 찾기", "책 정보와 목차", "그룹 정보"] as const;
 type Step = 1 | 2 | 3;
 
@@ -85,7 +94,8 @@ export function NewGroupForm() {
     choice === "" &&
     Boolean(conflictIsbn) &&
     book.isbn.replace(/[\s-]/g, "").toUpperCase() === conflictIsbn;
-  const chapterCount = parseChapterLines(book.chapters).length;
+  const parsedChapters = parseChapterLines(book.chapters);
+  const chapterCount = parsedChapters.length;
 
   function editBook(field: keyof typeof EMPTY_BOOK, value: string) {
     setBook((current) => ({ ...current, [field]: value }));
@@ -385,12 +395,71 @@ export function NewGroupForm() {
                 {errors.chapters}
               </p>
             )}
-            <p id="chapters-hint" className="text-muted-foreground text-sm">
-              한 줄에 한 장씩 적어 주세요. 지금 {chapterCount}개 장이에요. 줄
-              끝에 <code>| 7</code>처럼 시작 쪽을 붙이면 같은 책을 읽는 회원이
-              쪽수로 진도를 입력할 수 있어요. 이 목차가 그룹 전체의 위치 기준이
-              돼요.
-            </p>
+            <div
+              id="chapters-hint"
+              className="bg-muted flex flex-col gap-2 rounded-lg p-3 text-sm"
+            >
+              <p>
+                한 줄에 한 장씩 적어 주세요. 이 목차가 그룹 전체의 위치 기준이
+                돼요.
+              </p>
+              <p className="font-medium">시작 쪽 적는 방법 (선택)</p>
+              <ul className="flex flex-col gap-1">
+                {PAGE_FORMATS.map(([example, meaning]) => (
+                  <li key={example} className="flex flex-wrap gap-x-2">
+                    <code className="bg-background rounded px-1.5">
+                      {example}
+                    </code>
+                    <span className="text-muted-foreground">→ {meaning}</span>
+                  </li>
+                ))}
+              </ul>
+              <p>
+                <span className="font-medium">주의:</span>{" "}
+                <code>어린 새 7</code>처럼 <code>|</code>, <code>p</code>,{" "}
+                <code>쪽</code> 표시 없이 숫자만 붙이면 쪽수인지 제목의 일부인지
+                추측해서 읽기 때문에 틀릴 수 있어요. 위 형식 중 하나로 적는 것이
+                정확해요.
+              </p>
+              <p className="text-muted-foreground">
+                시작 쪽을 모든 장에 적으면 같은 책을 읽는 회원이 쪽수로 진도를
+                입력할 수 있어요.
+              </p>
+            </div>
+            {chapterCount > 0 && (
+              <div className="flex flex-col gap-1.5">
+                <p className="text-sm font-medium">
+                  이렇게 저장돼요 ({chapterCount}개 장)
+                </p>
+                <ol
+                  aria-label="목차 미리 보기"
+                  className="max-h-56 divide-y overflow-y-auto rounded-lg border text-sm"
+                >
+                  {parsedChapters.map((chapter) => (
+                    <li
+                      key={chapter.number}
+                      className="flex items-baseline justify-between gap-3 px-3 py-1.5"
+                    >
+                      <span>
+                        <span className="text-muted-foreground mr-2 tabular-nums">
+                          {chapter.number}
+                        </span>
+                        {chapter.title}
+                      </span>
+                      <span className="text-muted-foreground shrink-0 tabular-nums">
+                        {chapter.startPage
+                          ? `${chapter.startPage}쪽`
+                          : "쪽수 없음"}
+                      </span>
+                    </li>
+                  ))}
+                </ol>
+                <p className="text-muted-foreground text-sm">
+                  제목과 쪽수가 잘못 나뉘었으면 그 줄을 <code>제목 | 쪽수</code>{" "}
+                  형식으로 고쳐 주세요.
+                </p>
+              </div>
+            )}
           </div>
 
           {confirmNoChapters && (
