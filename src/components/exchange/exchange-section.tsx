@@ -8,6 +8,7 @@ import {
   updateNote,
   updateQuote,
 } from "@/app/groups/[id]/exchange-actions";
+import { ActionGroup } from "@/components/action-group";
 import { CollapsibleNav } from "@/components/exchange/collapsible-nav";
 import { Composer } from "@/components/exchange/composer";
 import { EditForm } from "@/components/exchange/edit-form";
@@ -214,7 +215,7 @@ export async function ExchangeSection({
               </span>
             )}
             {/* 좋아요를 뺀 버튼은 모양을 맞춰 오른쪽 가장자리에 모은다 */}
-            <div className={ACTIONS}>
+            <ActionGroup className={ACTIONS}>
               {!isReply && (
                 <NoteForm
                   groupId={groupId}
@@ -259,7 +260,7 @@ export async function ExchangeSection({
                   </Button>
                 </form>
               )}
-            </div>
+            </ActionGroup>
           </div>
 
           {note.replies.length > 0 && (
@@ -320,7 +321,7 @@ export async function ExchangeSection({
             {thread.text}
           </blockquote>
           {(isCreator || isOwner) && (
-            <div className={ACTIONS}>
+            <ActionGroup className={ACTIONS}>
               <EditForm
                 action={updateQuote}
                 fields={{ quoteId: thread.id }}
@@ -355,7 +356,7 @@ export async function ExchangeSection({
                   confirmLabel="내리기"
                 />
               )}
-            </div>
+            </ActionGroup>
           )}
         </figure>
         <div className="flex flex-col gap-5 px-6 py-5">

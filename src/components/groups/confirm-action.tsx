@@ -1,7 +1,8 @@
 "use client";
 
-import { useActionState, useState } from "react";
+import { useActionState } from "react";
 
+import { usePanel } from "@/components/action-group";
 import { Button } from "@/components/ui/button";
 import { EMPTY_FORM_STATE, type FormState } from "@/lib/form-state";
 
@@ -30,7 +31,7 @@ export function ConfirmAction({
   triggerVariant = "outline",
 }: ConfirmActionProps) {
   const [state, formAction, pending] = useActionState(action, EMPTY_FORM_STATE);
-  const [asking, setAsking] = useState(false);
+  const [asking, setAsking] = usePanel();
 
   return (
     <>

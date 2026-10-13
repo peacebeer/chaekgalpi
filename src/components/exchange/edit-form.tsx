@@ -1,7 +1,8 @@
 "use client";
 
-import { useActionState, useState } from "react";
+import { useActionState } from "react";
 
+import { usePanel } from "@/components/action-group";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { EMPTY_FORM_STATE, type FormState } from "@/lib/form-state";
@@ -27,7 +28,7 @@ export function EditForm({
   label,
   hint,
 }: EditFormProps) {
-  const [open, setOpen] = useState(false);
+  const [open, setOpen] = usePanel();
   const [state, formAction, pending] = useActionState(
     async (prev: FormState, formData: FormData) => {
       const result = await action(prev, formData);
