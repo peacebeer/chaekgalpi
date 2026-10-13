@@ -132,3 +132,21 @@ describe("wholeBookChapters", () => {
     expect(isWholeBook(parseChapterLines("프롤로그"))).toBe(false);
   });
 });
+
+describe("화면에 안내하는 시작 쪽 표기", () => {
+  test("안내한 형식은 모두 같은 장과 쪽수로 읽힌다", () => {
+    for (const line of [
+      "어린 새 | 7",
+      "어린 새 7p",
+      "어린 새 7쪽",
+      "어린 새 p.7",
+    ]) {
+      expect(parseChapterLines(line)).toEqual([
+        { number: 1, title: "어린 새", startPage: 7 },
+      ]);
+    }
+    expect(parseChapterLines("어린 새")).toEqual([
+      { number: 1, title: "어린 새", startPage: null },
+    ]);
+  });
+});
