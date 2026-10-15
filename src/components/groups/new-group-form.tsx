@@ -7,14 +7,17 @@ import {
   pickBook,
   searchBooks,
   type BookSearchResult,
+  type PickedBook,
 } from "@/app/groups/actions";
 import { Field, MarkBadge } from "@/components/auth/field";
 import { BookCover } from "@/components/groups/book-cover";
+import { TocVersionPicker } from "@/components/groups/toc-version-picker";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { parseChapterLines } from "@/lib/books/chapters";
+import type { TocVersion } from "@/lib/books/versions";
 import { EMPTY_FORM_STATE, type FormState } from "@/lib/form-state";
 import { LIMITS } from "@/lib/validation/limits";
 
@@ -70,8 +73,12 @@ export function NewGroupForm() {
   const [book, setBook] = useState(EMPTY_BOOK);
   const [group, setGroup] = useState(INITIAL_GROUP);
   const [source, setSource] = useState<"nlk" | "kakao" | "manual">("manual");
-  // 같은 ISBN의 책이 이미 등록돼 있을 때의 선택. ""는 해당 없음 또는 아직 고르지 않음
-  const [choice, setChoice] = useState<"" | "reuse" | "own">("");
+  // 고른 책의 외부 자료(카카오·도서관)와, 같은 ISBN으로 저장된 목차 버전
+  const [fresh, setFresh] = useState<PickedBook | null>(null);
+  const [versions, setVersions] = useState<TocVersion[]>([]);
+  // 그대로 쓰려고 고른 버전, 바탕으로 고쳐 만드는 버전("" = 없음)
+  const [version, setVersion] = useState("");
+  const [basedOn, setBasedOn] = useState("");
 
   const [query, setQuery] = useState("");
   const [search, setSearch] = useState<BookSearchResult | null>(null);
@@ -88,11 +95,9 @@ export function NewGroupForm() {
     async (prev: FormState, formData: FormData) => {
       const result = await createGroup(prev, formData);
       // 책 쪽에 문제가 있으면 그 단계로 돌아가서 보여 준다.
-      const bookProblem =
-        Boolean(result.values?.conflictIsbn) ||
-        Object.keys(result.fieldErrors ?? {}).some((key) =>
-          BOOK_FIELDS.has(key),
-        );
+      const bookProblem = Object.keys(result.fieldErrors ?? {}).some((key) =>
+        BOOK_FIELDS.has(key),
+      );
       if (bookProblem) setStep(2);
       return result;
     },
@@ -101,13 +106,12 @@ export function NewGroupForm() {
 
   const errors = state.fieldErrors ?? {};
   // 등록된 목차를 그대로 쓰는 동안에는 책 정보를 고칠 수 없다.
-  const existing = choice === "reuse";
-  // 직접 입력한 ISBN이 이미 등록된 책이라고 서버가 알려 준 경우
-  const conflictIsbn = state.values?.conflictIsbn;
-  const mustChoose =
-    choice === "" &&
-    Boolean(conflictIsbn) &&
-    book.isbn.replace(/[\s-]/g, "").toUpperCase() === conflictIsbn;
+  const existing = version !== "";
+  // 도서관 목차를 손대지 않고 쓰는지(서버가 다시 확인한다)
+  const tocFromLibrary =
+    !existing &&
+    Boolean(fresh?.tocFromLibrary) &&
+    book.chapters.trim() === fresh?.chaptersText.trim();
   const parsedChapters = parseChapterLines(book.chapters);
   const chapterCount = parsedChapters.length;
   const missingRecommended = [
@@ -157,21 +161,19 @@ export function NewGroupForm() {
         setPickError(result.message);
         return;
       }
-      const {
-        chaptersText,
-        existing: saved,
-        source: pickedFrom,
-        ...fields
-      } = result.book;
-      setBook({ ...fields, chapters: chaptersText });
-      setSource(pickedFrom);
-      setChoice(saved ? "reuse" : "");
+      setFresh(result.book);
+      setVersions(result.versions);
+      setSource(result.book.source);
+      // 저장된 목차가 있으면 추천 1순위를 먼저 골라 둔다.
+      if (result.versions.length > 0)
+        pickVersion(result.versions[0], result.book);
+      else startFresh(result.book);
       setSearch(null);
       setTitleMissing(false);
       setNotice(
-        saved
+        result.versions.length > 0
           ? null
-          : chaptersText
+          : result.book.chaptersText
             ? "책 정보와 목차를 불러왔어요. 목차가 실제 책과 맞는지 확인해 주세요."
             : "책 정보를 불러왔어요. 이 책은 목차 자료가 없어요.",
       );
@@ -179,10 +181,59 @@ export function NewGroupForm() {
     });
   }
 
+  // 저장된 버전의 책 정보와 목차로 칸을 채운다.
+  function fillFrom(picked: TocVersion, base: PickedBook) {
+    setBook({
+      isbn: base.isbn,
+      title: picked.title,
+      author: picked.author,
+      translator: picked.translator,
+      publisher: picked.publisher,
+      pages: picked.pages,
+      coverUrl: picked.coverUrl || base.coverUrl,
+      chapters: picked.chaptersText,
+    });
+  }
+
+  function pickVersion(picked: TocVersion, base = fresh) {
+    if (!base) return;
+    fillFrom(picked, base);
+    setVersion(picked.id);
+    setBasedOn("");
+  }
+
+  function editFrom(picked: TocVersion) {
+    if (!fresh) return;
+    fillFrom(picked, fresh);
+    setVersion("");
+    setBasedOn(picked.id);
+  }
+
+  // 외부 자료(카카오 책 정보 + 도서관 목차)로 새 목차를 시작한다.
+  function startFresh(base = fresh) {
+    if (!base) return;
+    const { chaptersText, ...fields } = base;
+    setBook({
+      isbn: fields.isbn,
+      title: fields.title,
+      author: fields.author,
+      translator: fields.translator,
+      publisher: fields.publisher,
+      pages: fields.pages,
+      coverUrl: fields.coverUrl,
+      chapters: chaptersText,
+    });
+    setVersion("");
+    setBasedOn("");
+  }
+
   function enterManually() {
     setBook(EMPTY_BOOK);
     setSource("manual");
-    setChoice("");
+    setFresh(null);
+    setVersions([]);
+    setVersion("");
+    setBasedOn("");
     setNotice(null);
     setPickError(null);
     setTitleMissing(false);
@@ -352,7 +403,13 @@ export function NewGroupForm() {
         noValidate
       >
         <input type="hidden" name="source" value={source} />
-        <input type="hidden" name="bookChoice" value={choice} />
+        <input type="hidden" name="bookVersion" value={version} />
+        <input type="hidden" name="basedOn" value={basedOn} />
+        <input
+          type="hidden"
+          name="tocFromLibrary"
+          value={tocFromLibrary ? "1" : ""}
+        />
         <input type="hidden" name="coverUrl" value={book.coverUrl} />
 
         <section hidden={step !== 2} className="flex flex-col gap-4">
@@ -368,33 +425,16 @@ export function NewGroupForm() {
             </p>
           )}
 
-          {(choice !== "" || mustChoose) && (
-            <div className="flex flex-col gap-2 rounded-lg border p-3 text-sm">
-              <p>
-                {choice === "own"
-                  ? "내 목차로 따로 만들어요. 아래 목차를 원하는 대로 고쳐 주세요. 따로 만든 책은 ISBN 없이 저장돼요."
-                  : "이미 책갈피에 등록된 책이에요. 등록된 목차를 그대로 쓰거나, 내 목차로 따로 만들 수 있어요."}
-              </p>
-              <div className="flex flex-wrap gap-2">
-                <Button
-                  type="button"
-                  size="sm"
-                  variant={choice === "reuse" ? "default" : "outline"}
-                  onClick={() => choose(book.isbn)}
-                  disabled={searching}
-                >
-                  등록된 목차 그대로 쓰기
-                </Button>
-                <Button
-                  type="button"
-                  size="sm"
-                  variant={choice === "own" ? "default" : "outline"}
-                  onClick={() => setChoice("own")}
-                >
-                  내 목차로 따로 만들기
-                </Button>
-              </div>
-            </div>
+          {versions.length > 0 && (
+            <TocVersionPicker
+              versions={versions}
+              selected={version}
+              basedOn={basedOn}
+              libraryTocAvailable={Boolean(fresh?.tocFromLibrary)}
+              onUse={(picked) => pickVersion(picked)}
+              onEditFrom={editFrom}
+              onFresh={() => startFresh()}
+            />
           )}
 
           <Field

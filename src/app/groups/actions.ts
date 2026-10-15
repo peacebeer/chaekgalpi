@@ -14,6 +14,7 @@ import { fieldErrorsOf, textOf, type FormState } from "@/lib/form-state";
 import { hasKakaoKey, searchKakao } from "@/lib/kakao/client";
 import { safeCoverUrl } from "@/lib/kakao/parse";
 import { fetchNlkToc, searchNlk } from "@/lib/nlk/client";
+import { sameToc, toTocVersions, type TocVersion } from "@/lib/books/versions";
 import { createClient } from "@/lib/supabase/server";
 import { bookSchema, isbnSchema, type BookInput } from "@/lib/validation/book";
 import { uuidSchema } from "@/lib/validation/common";
@@ -112,27 +113,44 @@ export type PickedBook = {
   pages: string;
   coverUrl: string;
   chaptersText: string;
-  source: "nlk" | "kakao";
-  // 이미 책갈피에 등록된 책이면 등록된 목차를 그대로 쓴다.
-  existing: boolean;
+  source: "nlk" | "kakao" | "manual";
+  // 목차를 국립중앙도서관 자료에서 그대로 가져왔는지
+  tocFromLibrary: boolean;
 };
 
 export type PickBookResult =
-  { ok: true; book: PickedBook } | { ok: false; message: string };
+  | {
+      ok: true;
+      // 외부 자료(카카오·국립중앙도서관)로 채운 책 정보. "새로 만들기"의 출발점
+      book: PickedBook;
+      // 같은 ISBN으로 이미 저장된 목차 버전(추천 순서)
+      versions: TocVersion[];
+    }
+  | { ok: false; message: string };
 
-async function findUsableBook(supabase: SupabaseServerClient, isbn: string) {
-  const { data } = await supabase
-    .from("books")
-    .select(
-      "id, isbn, title, author, translator, publisher, pages, cover_url, source, created_by, book_chapters(number, title, start_page)",
-    )
-    .eq("isbn", isbn)
-    .maybeSingle();
-  return data;
+async function loadVersions(
+  supabase: SupabaseServerClient,
+  isbn: string,
+): Promise<TocVersion[]> {
+  const { data } = await supabase.rpc("toc_versions", { p_isbn: isbn });
+  return toTocVersions(data ?? []);
+}
+
+// 국립중앙도서관이 이 ISBN에 대해 주는 목차(정리된 줄 형식). 없거나 실패하면 null
+async function libraryToc(isbn: string): Promise<string | null> {
+  try {
+    const [found] = await searchNlk(isbn);
+    if (!found) return null;
+    const toc = found.tocText ?? (await fetchNlkToc(found.tocUrl));
+    return toc ? formatChapterLines(parseChapterLines(toc)) : null;
+  } catch {
+    return null;
+  }
 }
 
 // 검색 결과에서 고른 책의 정보와 목차를 불러온다. 값은 서버가 ISBN으로 다시 조회해서 얻는다.
-// 책 정보와 표지는 카카오에서, 목차와 전체 쪽수는 국립중앙도서관에서 가져온다.
+// 책 정보와 표지는 카카오에서, 목차와 전체 쪽수는 국립중앙도서관에서 가져오고,
+// 같은 ISBN으로 저장된 목차 버전도 함께 돌려준다.
 export async function pickBook(isbn: string): Promise<PickBookResult> {
   await requireUser("/groups/new");
 
@@ -142,132 +160,109 @@ export async function pickBook(isbn: string): Promise<PickBookResult> {
   }
 
   const supabase = await createClient();
-  const saved = await findUsableBook(supabase, parsed.data);
-  if (saved && saved.book_chapters.length > 0) {
-    const chapters = [...saved.book_chapters].sort(
-      (a, b) => a.number - b.number,
-    );
-    return {
-      ok: true,
-      book: {
-        isbn: parsed.data,
-        title: saved.title,
-        author: saved.author ?? "",
-        translator: saved.translator ?? "",
-        publisher: saved.publisher ?? "",
-        pages: saved.pages ? String(saved.pages) : "",
-        coverUrl: saved.cover_url ?? "",
-        chaptersText: formatChapterLines(
-          chapters.map((chapter) => ({
-            title: chapter.title,
-            startPage: chapter.start_page,
-          })),
-        ),
-        source: saved.source === "kakao" ? "kakao" : "nlk",
-        existing: true,
-      },
-    };
-  }
-
-  const [kakao, nlk] = await Promise.allSettled([
+  const [versions, kakao, nlk] = await Promise.all([
+    loadVersions(supabase, parsed.data),
     hasKakaoKey()
-      ? searchKakao(parsed.data, { isbnOnly: true })
-      : Promise.reject(new Error("no kakao key")),
-    searchNlk(parsed.data),
+      ? searchKakao(parsed.data, { isbnOnly: true }).catch(() => null)
+      : null,
+    searchNlk(parsed.data).catch(() => null),
   ]);
   const fromKakao =
-    kakao.status === "fulfilled"
-      ? (kakao.value.books.find((book) => book.isbn === parsed.data) ??
-        kakao.value.books[0])
-      : undefined;
-  const fromNlk = nlk.status === "fulfilled" ? nlk.value[0] : undefined;
-  if (!fromKakao && !fromNlk) return { ok: false, message: SEARCH_FAILED };
+    kakao?.books.find((book) => book.isbn === parsed.data) ?? kakao?.books[0];
+  const fromNlk = nlk?.[0];
+  const top = versions[0];
+  if (!fromKakao && !fromNlk && !top) {
+    return { ok: false, message: SEARCH_FAILED };
+  }
 
   // 응답에 목차 글이 있으면 그것을 쓰고, 없으면 목차 파일을 읽는다.
   const toc = fromNlk
     ? (fromNlk.tocText ?? (await fetchNlkToc(fromNlk.tocUrl)))
     : null;
+  const chaptersText = toc ? formatChapterLines(parseChapterLines(toc)) : "";
 
   return {
     ok: true,
     book: {
       isbn: parsed.data,
-      title: fromKakao?.title ?? fromNlk?.title ?? "",
-      author: fromKakao?.author || fromNlk?.author || "",
-      translator: fromKakao?.translator || fromNlk?.translator || "",
-      publisher: fromKakao?.publisher || fromNlk?.publisher || "",
+      title: fromKakao?.title ?? fromNlk?.title ?? top?.title ?? "",
+      author: fromKakao?.author || fromNlk?.author || top?.author || "",
+      translator:
+        fromKakao?.translator || fromNlk?.translator || top?.translator || "",
+      publisher:
+        fromKakao?.publisher || fromNlk?.publisher || top?.publisher || "",
       pages: fromNlk?.pages ? String(fromNlk.pages) : "",
-      coverUrl: fromKakao?.coverUrl ?? "",
-      chaptersText: toc ? formatChapterLines(parseChapterLines(toc)) : "",
-      source: fromKakao ? "kakao" : "nlk",
-      existing: false,
+      coverUrl: fromKakao?.coverUrl ?? top?.coverUrl ?? "",
+      chaptersText,
+      source: fromKakao ? "kakao" : fromNlk ? "nlk" : "manual",
+      tocFromLibrary: chaptersText !== "",
     },
+    versions,
   };
 }
 
-// 같은 ISBN의 책이 이미 등록돼 있을 때: 등록된 목차를 그대로 쓸지, 내 목차로 따로 등록할지
-type BookChoice = "reuse" | "own" | "";
-
-const BOOK_CONFLICT =
-  "이 ISBN의 책은 이미 책갈피에 등록돼 있어요. 등록된 목차를 쓸지, 내 목차로 따로 만들지 골라 주세요.";
-
-// 대표 도서를 정한다: 같은 ISBN으로 등록된 책이 있으면 고른 대로 재사용하거나 따로 등록한다.
-async function resolveBookId(
+// 고른 목차 버전이 실제로 쓸 수 있는 책(목차가 있는 행)인지 확인한다.
+async function usableVersion(
   supabase: SupabaseServerClient,
-  userId: string,
+  bookId: string,
+): Promise<boolean> {
+  const { data } = await supabase
+    .from("books")
+    .select("id, book_chapters(number)")
+    .eq("id", bookId)
+    .maybeSingle();
+  return Boolean(data && data.book_chapters.length > 0);
+}
+
+// 입력한 책 정보와 목차를 새 목차 버전으로 저장한다.
+// 같은 ISBN에 장 제목·시작 쪽·전체 쪽수가 똑같은 버전이 있으면 새로 만들지 않고 그것을 쓴다.
+async function saveVersion(
+  supabase: SupabaseServerClient,
   book: BookInput,
-  choice: BookChoice,
-): Promise<{ bookId: string } | { error: unknown } | { conflictIsbn: string }> {
-  let isbn = book.isbn;
-  let bookId: string | null = null;
-
-  if (isbn) {
-    const saved = await findUsableBook(supabase, isbn);
-    if (saved && saved.book_chapters.length > 0) {
-      if (choice === "reuse") return { bookId: saved.id };
-      // 고르지 않았으면 입력한 목차를 말없이 버리지 않고 되묻는다.
-      if (choice !== "own") return { conflictIsbn: isbn };
-      // 내 목차로 따로 등록: ISBN은 책 한 권에만 붙을 수 있어 비워 둔다.
-      isbn = null;
-    } else if (saved && saved.created_by === userId) {
-      // 내가 등록하다가 목차 저장에 실패했던 책: 목차만 이어서 넣는다.
-      bookId = saved.id;
-    } else if (saved) {
-      // 남이 등록했지만 목차가 없어 쓸 수 없는 책: ISBN 없이 따로 등록한다.
-      isbn = null;
-    }
+  basedOn: string | null,
+  checkLibrary: boolean,
+): Promise<{ bookId: string } | { error: unknown }> {
+  if (book.isbn) {
+    const versions = await loadVersions(supabase, book.isbn);
+    const same = versions.find((version) => sameToc(version, book));
+    if (same) return { bookId: same.id };
   }
 
-  if (!bookId) {
-    const { data, error } = await supabase
-      .from("books")
-      .insert({
-        isbn,
-        title: book.title,
-        author: book.author,
-        translator: book.translator,
-        publisher: book.publisher,
-        pages: book.pages,
-        source: book.source,
-        cover_url: book.coverUrl,
-      })
-      .select("id")
-      .single();
-    if (error) return { error };
-    bookId = data.id;
-  }
+  // 도서관 목차를 그대로 쓴 것인지는 서버가 다시 받아 와 비교해서 정한다.
+  const fromLibrary =
+    checkLibrary &&
+    book.isbn !== null &&
+    (await libraryToc(book.isbn)) === formatChapterLines(book.chapters);
 
-  const { error } = await supabase.from("book_chapters").insert(
+  const { data, error } = await supabase
+    .from("books")
+    .insert({
+      isbn: book.isbn,
+      title: book.title,
+      author: book.author,
+      translator: book.translator,
+      publisher: book.publisher,
+      pages: book.pages,
+      source: book.source,
+      cover_url: book.coverUrl,
+      based_on: basedOn,
+      toc_source: fromLibrary ? "nlk" : "member",
+    })
+    .select("id")
+    .single();
+  if (error) return { error };
+
+  const { error: chapterError } = await supabase.from("book_chapters").insert(
     book.chapters.map((chapter) => ({
-      book_id: bookId,
+      book_id: data.id,
       number: chapter.number,
       title: chapter.title,
       start_page: chapter.startPage,
     })),
   );
-  if (error) return { error };
+  if (chapterError) return { error: chapterError };
 
-  return { bookId };
+  return { bookId: data.id };
 }
 
 export async function createGroup(
@@ -275,6 +270,12 @@ export async function createGroup(
   formData: FormData,
 ): Promise<FormState> {
   const user = await requireUser("/groups/new");
+  if (user.isAnonymous) {
+    return {
+      error:
+        "체험 중에는 그룹을 만들 수 없어요. 가입하면 내 그룹을 만들 수 있어요.",
+    };
+  }
 
   const pages = textOf(formData, "pages").trim();
   const pageCount = pages === "" ? null : Number(pages);
@@ -317,15 +318,22 @@ export async function createGroup(
   }
 
   const supabase = await createClient();
-  const choiceInput = textOf(formData, "bookChoice");
-  const choice: BookChoice =
-    choiceInput === "reuse" || choiceInput === "own" ? choiceInput : "";
-  const resolved = await resolveBookId(supabase, user.id, book.data, choice);
-  if ("conflictIsbn" in resolved) {
-    return {
-      error: BOOK_CONFLICT,
-      values: { conflictIsbn: resolved.conflictIsbn },
-    };
+  // 저장된 목차 버전을 골랐으면 그것을 쓰고, 아니면 입력한 목차를 새 버전으로 저장한다.
+  const picked = uuidSchema.safeParse(textOf(formData, "bookVersion"));
+  const basedOn = uuidSchema.safeParse(textOf(formData, "basedOn"));
+  let resolved: { bookId: string } | { error: unknown };
+  if (picked.success) {
+    if (!(await usableVersion(supabase, picked.data))) {
+      return { error: "고른 목차를 찾을 수 없어요. 책을 다시 골라 주세요." };
+    }
+    resolved = { bookId: picked.data };
+  } else {
+    resolved = await saveVersion(
+      supabase,
+      book.data,
+      basedOn.success ? basedOn.data : null,
+      textOf(formData, "tocFromLibrary") === "1",
+    );
   }
   if ("error" in resolved) return { error: toErrorMessage(resolved.error) };
 

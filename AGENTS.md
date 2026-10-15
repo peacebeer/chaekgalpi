@@ -44,7 +44,7 @@
 | 테이블 | 핵심 |
 | --- | --- |
 | profiles | 가입 시 트리거로 자동 생성. nickname 1–30자 |
-| books / book_chapters | 대표 도서와 목차. start_page는 선택(쪽수 환산용) |
+| books / book_chapters | 대표 도서와 목차. start_page는 선택(쪽수 환산용). 같은 ISBN에 목차 버전 여러 개(행마다 한 버전, based_on·toc_source). 그룹이 쓰는 목차는 고치지 않고 새 버전으로 |
 | groups | owner_id = 리더. capacity 3–8, quote_limit 10,000, invite_code |
 | memberships | 진도 (progress_chapter, progress_pct), finished_at = 완독 |
 | quotes | 인용 카드 1–300자. 다른 회원 감상이 달리면 locked_at 설정 |
@@ -71,6 +71,7 @@
 | 인용문 수정 | `quotes` UPDATE (text). 등록자는 잠기기 전 자유롭게, 잠긴 뒤와 리더는 오타 수정(10자 이내)만 |
 | 인용 카드 삭제 | 등록자: `quotes` DELETE (잠기기 전만) / 리더: `rpc('remove_quote', { p_quote_id })` |
 | 그룹 인용 한도 사용량 | `rpc('quote_usage', { p_group_id })` → `{ used, quote_limit }` (잠긴 카드 포함) |
+| 같은 ISBN의 목차 버전 | `rpc('toc_versions', { p_isbn })` → 추천 순(도서관 제공 → 쓰는 그룹 수 → 시작 쪽 유무). 화면은 3개만 보여 주고 나머지는 더 보기. 똑같은 목차는 새로 저장하지 않는다 |
 | 입장 전 그룹 소개 | `rpc('group_preview', { p_invite_code })` 또는 `{ p_group_id }`(공개 그룹) → 이름·리더·기간·책·목차 |
 | 그룹 정보 수정·삭제, 회원 내보내기·나가기 | `groups` UPDATE/DELETE (리더), `memberships` DELETE (본인 또는 리더) |
 
@@ -141,7 +142,7 @@ M0~M4, M6을 마쳤고 M5는 보류했다. 그 뒤 추가한 것:
 
 **미뤄 둔 것**
 
-- 목차 입력 부담 줄이기, ISBN 하나에 목차 여러 벌 두고 고르기
+- 목차 입력 부담 줄이기 (ISBN 하나에 목차 여러 벌은 2026-10-16에 구현)
 - 이메일·웹 푸시 알림, 주차별 읽기 범위, 내보낸 회원 재입장 차단
 - Vercel 배포와 그 뒤의 운영 준비(PRD "배포 실습")
 

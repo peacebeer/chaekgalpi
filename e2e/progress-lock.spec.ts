@@ -68,7 +68,7 @@ test.describe("진도 잠금 흐름", () => {
     const quoteText = `E2E 인용문 ${tag} 아무도 모르는 2장의 문장`;
     const noteText = `E2E 감상 ${tag}`;
 
-    // 돌릴 때마다 책이 쌓이지 않도록 정해 둔 가짜 ISBN의 책 한 권을 다시 쓴다.
+    // 돌릴 때마다 책이 쌓이지 않도록 정해 둔 가짜 ISBN과 같은 목차를 써서 같은 목차 버전을 다시 쓴다.
     // (책은 지울 권한이 없게 설계돼 있어 테스트가 치울 수 없다.)
     const isbn =
       testInfo.project.name === "mobile" ? "9790000000011" : "9790000000028";
@@ -95,18 +95,8 @@ test.describe("진도 잠금 흐름", () => {
       await pageA.getByLabel("그룹 이름").fill(groupName);
       await createAnyway(pageA);
 
-      // 두 번째 실행부터는 같은 ISBN의 책이 이미 있어 되묻는다. 등록된 책을 그대로 쓴다.
+      // 두 번째 실행부터는 같은 ISBN에 똑같은 목차 버전이 있어, 새로 만들지 않고 그 버전을 쓴다.
       const created = pageA.getByRole("heading", { level: 1, name: groupName });
-      const reuse = pageA.getByRole("button", {
-        name: "등록된 목차 그대로 쓰기",
-      });
-      await expect(created.or(reuse)).toBeVisible();
-      if (await reuse.isVisible()) {
-        await reuse.click();
-        await expect(pageA.getByLabel("책 제목")).toHaveAttribute("readonly");
-        await pageA.getByRole("button", { name: "다음" }).click();
-        await createAnyway(pageA);
-      }
       await expect(created).toBeVisible();
       await pageA.waitForURL(/\/groups\/[0-9a-f-]{36}$/);
       const groupUrl = new URL(pageA.url()).pathname;
