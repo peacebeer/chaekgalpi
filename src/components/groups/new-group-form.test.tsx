@@ -1,4 +1,10 @@
-import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import {
+  cleanup,
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+} from "@testing-library/react";
 import { afterEach, describe, expect, test, vi } from "vitest";
 
 import { NewGroupForm } from "./new-group-form";
@@ -136,5 +142,97 @@ describe("목차 미리 보기", () => {
     expect(preview.textContent).toContain("130쪽");
     expect(preview.textContent).toContain("쪽수 없음");
     expect(screen.getByText(/이렇게 저장돼요 \(2개 장\)/)).toBeDefined();
+  });
+});
+
+describe("저장된 목차 버전", () => {
+  const fresh = {
+    isbn: "9788936434120",
+    title: "소년이 온다",
+    author: "한강",
+    translator: "",
+    publisher: "창비",
+    pages: "215",
+    coverUrl: "",
+    chaptersText: "1장 | 7\n2장 | 45",
+    source: "kakao" as const,
+    tocFromLibrary: true,
+  };
+  const saved = {
+    id: "e1000000-0000-0000-0000-0000000000b1",
+    title: "소년이 온다",
+    author: "한강",
+    translator: "",
+    publisher: "창비",
+    pages: "215",
+    coverUrl: "",
+    chaptersText: "어린 새 | 7\n검은 숨 | 45",
+    chapterCount: 2,
+    hasStartPages: true,
+    groupCount: 3,
+    fromLibrary: false,
+  };
+
+  const tocField = () =>
+    document.getElementById("chapters") as HTMLTextAreaElement;
+
+  async function pickSavedBook() {
+    actions.searchBooks.mockResolvedValue({
+      ok: true,
+      books: [{ ...fresh, year: "2014", coverUrl: null }],
+      total: 1,
+      nextPage: null,
+    });
+    actions.pickBook.mockResolvedValue({
+      ok: true,
+      book: fresh,
+      versions: [saved],
+    });
+    const view = render(<NewGroupForm />);
+    fireEvent.change(screen.getByLabelText("책 제목, 저자, 출판사 또는 ISBN"), {
+      target: { value: "소년이 온다" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "검색" }));
+    const result = await screen.findByRole("button", { name: /소년이 온다/ });
+    // 검색이 끝나 버튼이 다시 눌릴 수 있을 때 고른다.
+    await waitFor(() =>
+      expect((result as HTMLButtonElement).disabled).toBe(false),
+    );
+    fireEvent.click(result);
+    await screen.findByRole("region", { name: "저장된 목차" });
+    const hidden = (name: string) =>
+      (
+        view.container.querySelector(
+          `input[name="${name}"]`,
+        ) as HTMLInputElement
+      ).value;
+    return hidden;
+  }
+
+  test("저장된 목차가 있으면 추천 1순위를 그대로 쓰도록 골라 두고 고칠 수 없게 한다", async () => {
+    const hidden = await pickSavedBook();
+    expect(hidden("bookVersion")).toBe(saved.id);
+    expect((tocField() as HTMLTextAreaElement).value).toBe(saved.chaptersText);
+    expect(screen.getByLabelText(/^책 제목/).hasAttribute("readonly")).toBe(
+      true,
+    );
+  });
+
+  test("바탕으로 고쳐 만들면 칸을 고칠 수 있고, 새로 만들면 도서관 목차로 시작한다", async () => {
+    const hidden = await pickSavedBook();
+
+    fireEvent.click(
+      screen.getByRole("button", { name: "바탕으로 고쳐 만들기" }),
+    );
+    expect([hidden("bookVersion"), hidden("basedOn")]).toEqual(["", saved.id]);
+    expect(tocField().hasAttribute("readonly")).toBe(false);
+    expect(hidden("tocFromLibrary")).toBe("");
+
+    fireEvent.click(
+      screen.getByRole("button", { name: "도서관 목차로 새로 만들기" }),
+    );
+    expect([hidden("bookVersion"), hidden("basedOn")]).toEqual(["", ""]);
+    expect((tocField() as HTMLTextAreaElement).value).toBe(fresh.chaptersText);
+    expect(hidden("tocFromLibrary")).toBe("1");
   });
 });

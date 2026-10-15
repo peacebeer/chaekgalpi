@@ -71,6 +71,7 @@ export type Database = {
       books: {
         Row: {
           author: string | null
+          based_on: string | null
           cover_url: string | null
           created_at: string
           created_by: string | null
@@ -80,10 +81,12 @@ export type Database = {
           publisher: string | null
           source: string
           title: string
+          toc_source: string
           translator: string | null
         }
         Insert: {
           author?: string | null
+          based_on?: string | null
           cover_url?: string | null
           created_at?: string
           created_by?: string | null
@@ -93,10 +96,12 @@ export type Database = {
           publisher?: string | null
           source?: string
           title: string
+          toc_source?: string
           translator?: string | null
         }
         Update: {
           author?: string | null
+          based_on?: string | null
           cover_url?: string | null
           created_at?: string
           created_by?: string | null
@@ -106,9 +111,17 @@ export type Database = {
           publisher?: string | null
           source?: string
           title?: string
+          toc_source?: string
           translator?: string | null
         }
         Relationships: [
+          {
+            foreignKeyName: "books_based_on_fkey"
+            columns: ["based_on"]
+            isOneToOne: false
+            referencedRelation: "books"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "books_created_by_fkey"
             columns: ["created_by"]
@@ -496,6 +509,24 @@ export type Database = {
         }[]
       }
       start_demo: { Args: never; Returns: string }
+      toc_versions: {
+        Args: { p_isbn: string }
+        Returns: {
+          author: string
+          book_id: string
+          chapter_count: number
+          chapters: Json
+          cover_url: string
+          created_at: string
+          group_count: number
+          has_start_pages: boolean
+          pages: number
+          publisher: string
+          title: string
+          toc_source: string
+          translator: string
+        }[]
+      }
     }
     Enums: {
       [_ in never]: never
