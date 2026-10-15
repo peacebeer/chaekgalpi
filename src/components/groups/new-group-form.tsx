@@ -8,7 +8,7 @@ import {
   searchBooks,
   type BookSearchResult,
 } from "@/app/groups/actions";
-import { Field } from "@/components/auth/field";
+import { Field, MarkBadge } from "@/components/auth/field";
 import { BookCover } from "@/components/groups/book-cover";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -52,6 +52,17 @@ type Step = 1 | 2 | 3;
 // 서버가 돌려준 오류가 2단계(책) 칸의 것인지
 const BOOK_FIELDS = new Set([...Object.keys(EMPTY_BOOK), "source"]);
 
+// 단계 맨 위의 표시 설명
+function RequirementLegend() {
+  return (
+    <p className="text-muted-foreground flex flex-wrap items-center gap-x-1.5 gap-y-1 text-sm">
+      <MarkBadge mark="required" /> 표시는 꼭 채워야 하고,
+      <MarkBadge mark="recommended" /> 표시는 채우는 것을 권해요. 나머지는 비워
+      둬도 돼요.
+    </p>
+  );
+}
+
 export function NewGroupForm() {
   const [step, setStep] = useState<Step>(1);
 
@@ -70,7 +81,8 @@ export function NewGroupForm() {
 
   // 2단계에서 "다음"을 눌렀을 때의 안내
   const [titleMissing, setTitleMissing] = useState(false);
-  const [confirmNoChapters, setConfirmNoChapters] = useState(false);
+  // 권장 항목(전체 쪽수, 목차)을 비운 채 "그룹 만들기"를 눌렀을 때 한 번 알린다.
+  const [confirmMissing, setConfirmMissing] = useState(false);
 
   const [state, formAction, pending] = useActionState(
     async (prev: FormState, formData: FormData) => {
@@ -98,11 +110,17 @@ export function NewGroupForm() {
     book.isbn.replace(/[\s-]/g, "").toUpperCase() === conflictIsbn;
   const parsedChapters = parseChapterLines(book.chapters);
   const chapterCount = parsedChapters.length;
+  const missingRecommended = [
+    !book.pages.trim() && "전체 쪽수",
+    chapterCount === 0
+      ? "목차"
+      : parsedChapters.some((chapter) => !chapter.startPage) &&
+        "각 장의 시작 쪽",
+  ].filter((item): item is string => Boolean(item));
 
   function editBook(field: keyof typeof EMPTY_BOOK, value: string) {
     setBook((current) => ({ ...current, [field]: value }));
     if (field === "title") setTitleMissing(false);
-    if (field === "chapters") setConfirmNoChapters(false);
   }
 
   function runSearch() {
@@ -150,7 +168,6 @@ export function NewGroupForm() {
       setChoice(saved ? "reuse" : "");
       setSearch(null);
       setTitleMissing(false);
-      setConfirmNoChapters(false);
       setNotice(
         saved
           ? null
@@ -169,7 +186,6 @@ export function NewGroupForm() {
     setNotice(null);
     setPickError(null);
     setTitleMissing(false);
-    setConfirmNoChapters(false);
     setStep(2);
   }
 
@@ -178,11 +194,7 @@ export function NewGroupForm() {
       setTitleMissing(true);
       return;
     }
-    // 목차가 없으면 한 번 알리고, 다시 누르면 넘어간다.
-    if (chapterCount === 0 && !confirmNoChapters) {
-      setConfirmNoChapters(true);
-      return;
-    }
+    setConfirmMissing(false);
     setStep(3);
   }
 
@@ -327,7 +339,15 @@ export function NewGroupForm() {
         className="flex flex-col gap-6"
         onSubmit={(event) => {
           // 입력 칸에서 Enter를 눌러도 마지막 단계 전에는 제출하지 않는다.
-          if (step !== 3) event.preventDefault();
+          if (step !== 3) {
+            event.preventDefault();
+            return;
+          }
+          // 권장 항목이 비었으면 만들기 전에 한 번 알리고, 다시 누르면 만든다.
+          if (missingRecommended.length > 0 && !confirmMissing) {
+            event.preventDefault();
+            setConfirmMissing(true);
+          }
         }}
         noValidate
       >
@@ -337,6 +357,7 @@ export function NewGroupForm() {
 
         <section hidden={step !== 2} className="flex flex-col gap-4">
           <h2 className="text-lg font-semibold">2. 책 정보와 목차</h2>
+          <RequirementLegend />
           <p className="bg-muted rounded-lg p-3 text-sm">
             책 정보와 목차는 그룹을 만든 뒤에는 수정할 수 없어요. 감상이 목차의
             위치에 묶이기 때문이에요. 지금 한 번만 확인해 주세요.
@@ -379,6 +400,7 @@ export function NewGroupForm() {
           <Field
             name="title"
             label="책 제목"
+            mark="required"
             value={book.title}
             onChange={(event) => editBook("title", event.target.value)}
             readOnly={existing}
@@ -417,6 +439,7 @@ export function NewGroupForm() {
             <Field
               name="pages"
               label="전체 쪽수"
+              mark="recommended"
               inputMode="numeric"
               value={book.pages}
               onChange={(event) => editBook("pages", event.target.value)}
@@ -426,7 +449,7 @@ export function NewGroupForm() {
           </div>
           <Field
             name="isbn"
-            label="ISBN (선택)"
+            label="ISBN"
             inputMode="numeric"
             value={book.isbn}
             onChange={(event) => editBook("isbn", event.target.value)}
@@ -436,7 +459,10 @@ export function NewGroupForm() {
           />
 
           <div className="flex flex-col gap-1.5">
-            <Label htmlFor="chapters">목차 (선택, 권장)</Label>
+            <Label htmlFor="chapters">
+              목차
+              <MarkBadge mark="recommended" />
+            </Label>
             <Textarea
               id="chapters"
               name="chapters"
@@ -522,36 +548,19 @@ export function NewGroupForm() {
             )}
           </div>
 
-          {confirmNoChapters && (
-            <div
-              role="alert"
-              className="flex flex-col gap-1 rounded-lg border p-3 text-sm"
-            >
-              <p className="font-medium">목차 없이 진행할까요?</p>
-              <p>
-                목차가 없으면 책 전체를 하나로 보고 &ldquo;책 전체의 몇
-                %&rdquo;로만 위치를 나눠요. 판본이 다르면 같은 %라도 내용이
-                어긋나서, 아직 읽지 않은 내용이 보이는 스포일러가 생기기 쉬워요.
-                장 제목만이라도 적는 것을 권장해요.
-              </p>
-              <p className="text-muted-foreground">
-                그대로 진행하려면 다음을 한 번 더 눌러 주세요.
-              </p>
-            </div>
-          )}
-
           <div className="flex justify-between gap-2 border-t pt-4">
             <Button type="button" variant="outline" onClick={() => setStep(1)}>
               이전
             </Button>
             <Button type="button" onClick={leaveBookStep}>
-              {confirmNoChapters ? "목차 없이 다음" : "다음"}
+              다음
             </Button>
           </div>
         </section>
 
         <section hidden={step !== 3} className="flex flex-col gap-4">
           <h2 className="text-lg font-semibold">3. 그룹 정보</h2>
+          <RequirementLegend />
           <p className="text-muted-foreground text-sm">
             {book.title}
             {chapterCount > 0
@@ -561,6 +570,7 @@ export function NewGroupForm() {
           <Field
             name="name"
             label="그룹 이름"
+            mark="required"
             value={group.name}
             onChange={(event) =>
               setGroup({ ...group, name: event.target.value })
@@ -572,6 +582,7 @@ export function NewGroupForm() {
           <Field
             name="capacity"
             label="정원"
+            mark="required"
             type="number"
             min={LIMITS.capacityMin}
             max={LIMITS.capacityMax}
@@ -586,7 +597,7 @@ export function NewGroupForm() {
           <div className="grid grid-cols-2 gap-3">
             <Field
               name="startDate"
-              label="시작일 (선택)"
+              label="시작일"
               type="date"
               value={group.startDate}
               onChange={(event) =>
@@ -596,7 +607,7 @@ export function NewGroupForm() {
             />
             <Field
               name="targetDate"
-              label="목표 완독일 (선택)"
+              label="목표 완독일"
               type="date"
               value={group.targetDate}
               onChange={(event) =>
@@ -627,6 +638,44 @@ export function NewGroupForm() {
             그룹 정보는 만든 뒤에도 그룹 설정에서 바꿀 수 있어요.
           </p>
 
+          {confirmMissing && (
+            <div
+              role="alert"
+              className="border-highlight-foreground/40 bg-highlight/40 flex flex-col gap-2 rounded-lg border p-3 text-sm"
+            >
+              <p className="font-medium">
+                권장 항목을 비워 두고 만들까요? (비어 있음:{" "}
+                {missingRecommended.join(", ")})
+              </p>
+              <ul className="flex list-disc flex-col gap-1 pl-5">
+                {missingRecommended.includes("목차") && (
+                  <li>
+                    목차가 없으면 책 전체를 하나로 보고 &ldquo;책 전체의 몇
+                    %&rdquo;로만 위치를 나눠요. 판본이 다르면 같은 %라도 내용이
+                    어긋나서 아직 읽지 않은 내용이 보일 수 있어요.
+                  </li>
+                )}
+                <li>
+                  전체 쪽수
+                  {chapterCount > 0 ? "와 각 장의 시작 쪽을" : "를"} 적으면
+                  회원들이 진도와 인용 위치를 쪽수로 바로 적을 수 있어요. 없으면
+                  %로 어림잡아 골라야 해요.
+                </li>
+                <li>책 정보와 목차는 그룹을 만든 뒤에는 고칠 수 없어요.</li>
+              </ul>
+              <div>
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="outline"
+                  onClick={() => setStep(2)}
+                >
+                  책 정보로 돌아가 채우기
+                </Button>
+              </div>
+            </div>
+          )}
+
           <div className="flex justify-between gap-2 border-t pt-4">
             <Button
               type="button"
@@ -638,7 +687,11 @@ export function NewGroupForm() {
             </Button>
             {step === 3 && (
               <Button type="submit" disabled={pending}>
-                {pending ? "만드는 중…" : "그룹 만들기"}
+                {pending
+                  ? "만드는 중…"
+                  : confirmMissing
+                    ? "그대로 그룹 만들기"
+                    : "그룹 만들기"}
               </Button>
             )}
           </div>

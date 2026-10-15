@@ -27,6 +27,12 @@ async function setSlider(slider: Locator, value: number) {
   }, value);
 }
 
+// 쪽수 없이 목차만 적었으므로 만들기 전 권장 안내가 나온다. 그대로 만든다.
+async function createAnyway(page: Page) {
+  await page.getByRole("button", { name: "그룹 만들기" }).click();
+  await page.getByRole("button", { name: "그대로 그룹 만들기" }).click();
+}
+
 async function saveProgress(page: Page, chapter: string, pct: number) {
   const panel = page.locator("#tool-progress");
   if (!(await panel.isVisible())) {
@@ -83,11 +89,11 @@ test.describe("진도 잠금 흐름", () => {
       await pageA
         .getByLabel("책 제목")
         .fill(`E2E 책 (${testInfo.project.name})`);
-      await pageA.getByLabel("ISBN (선택)").fill(isbn);
+      await pageA.getByLabel("ISBN").fill(isbn);
       await pageA.getByLabel(/^목차/).fill("처음\n가운데\n끝");
       await pageA.getByRole("button", { name: "다음" }).click();
       await pageA.getByLabel("그룹 이름").fill(groupName);
-      await pageA.getByRole("button", { name: "그룹 만들기" }).click();
+      await createAnyway(pageA);
 
       // 두 번째 실행부터는 같은 ISBN의 책이 이미 있어 되묻는다. 등록된 책을 그대로 쓴다.
       const created = pageA.getByRole("heading", { level: 1, name: groupName });
@@ -99,7 +105,7 @@ test.describe("진도 잠금 흐름", () => {
         await reuse.click();
         await expect(pageA.getByLabel("책 제목")).toHaveAttribute("readonly");
         await pageA.getByRole("button", { name: "다음" }).click();
-        await pageA.getByRole("button", { name: "그룹 만들기" }).click();
+        await createAnyway(pageA);
       }
       await expect(created).toBeVisible();
       await pageA.waitForURL(/\/groups\/[0-9a-f-]{36}$/);

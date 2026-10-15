@@ -1,6 +1,7 @@
 import Link from "next/link";
 
 import { buttonVariants } from "@/components/ui/button";
+import { LIMITS } from "@/lib/validation/limits";
 
 const POINTS = [
   [
@@ -43,6 +44,11 @@ export default function Home() {
               그룹 둘러보기
             </Link>
           </div>
+          <p className="text-muted-foreground/80 text-xs">
+            저작권 보호를 위해 인용은 카드 한 장에{" "}
+            {LIMITS.quoteTextMax.toLocaleString("ko-KR")}자, 그룹 전체에{" "}
+            {LIMITS.groupQuoteLimit.toLocaleString("ko-KR")}자까지로 제한해요.
+          </p>
         </div>
 
         {/* 서비스가 어떻게 보이는지 알려 주는 예시. 지어낸 문장이다. */}

@@ -7,6 +7,8 @@ import {
 } from "@testing-library/react";
 import { afterEach, describe, expect, test, vi } from "vitest";
 
+import { buildPageMap } from "@/lib/books/pages";
+
 import { Composer } from "./composer";
 import { maxPctFor } from "./position-picker";
 
@@ -137,5 +139,44 @@ describe("글 남기기", () => {
     renderComposer({ chapter: 1, pct: 60, finished: false }, true);
     expect(screen.queryByLabelText("장")).toBeNull();
     expect(screen.getByText(/책 전체에서의 위치: 60%/)).toBeDefined();
+  });
+
+  test("모든 장의 시작 쪽과 전체 쪽수가 있으면 % 대신 쪽수로 받는다", () => {
+    const pageMap = buildPageMap(
+      [
+        { number: 1, start_page: 7 },
+        { number: 2, start_page: 43 },
+        { number: 3, start_page: 111 },
+      ],
+      189,
+    );
+    actions.findSimilarQuotes.mockResolvedValue([]);
+    const { container } = render(
+      <Composer
+        groupId={GROUP_ID}
+        chapters={chapters}
+        wholeBook={false}
+        progress={{ chapter: 2, pct: 50, finished: false }}
+        pageMap={pageMap}
+      />,
+    );
+    const hidden = (name: string) =>
+      (container.querySelector(`input[name="${name}"]`) as HTMLInputElement)
+        .value;
+
+    // 처음에는 내 진도 쪽(2장 50% = 77쪽)
+    const page = screen.getByLabelText("쪽수") as HTMLInputElement;
+    expect(page.value).toBe("77");
+    expect(screen.queryByLabelText("장")).toBeNull();
+    expect(screen.queryByRole("slider")).toBeNull();
+
+    fireEvent.change(page, { target: { value: "25" } });
+    expect([hidden("chapter"), hidden("pct")]).toEqual(["1", "50"]);
+    expect(screen.getByText(/1장 · 50%/)).toBeDefined();
+
+    // 진도보다 뒤 쪽은 고를 수 없다.
+    fireEvent.change(page, { target: { value: "120" } });
+    expect(screen.getByText(/1~77쪽 사이로/)).toBeDefined();
+    expect([hidden("chapter"), hidden("pct")]).toEqual(["1", "50"]);
   });
 });

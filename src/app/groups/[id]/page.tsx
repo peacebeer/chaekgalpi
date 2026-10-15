@@ -17,6 +17,7 @@ import { ReadingPlan } from "@/components/groups/reading-plan";
 import { buttonVariants } from "@/components/ui/button";
 import { requireUser } from "@/lib/auth/session";
 import { isWholeBook } from "@/lib/books/chapters";
+import { buildPageMap } from "@/lib/books/pages";
 import { overallPercent, positionLabel } from "@/lib/books/progress";
 import {
   buildCalendar,
@@ -103,6 +104,7 @@ async function GroupDetail({
     title,
   }));
   const wholeBook = isWholeBook(chapters);
+  const pageMap = buildPageMap(chapters, book.pages);
   const period = periodLabel(group.start_date, group.target_date);
   // 읽는 기간이 정해져 있으면 오늘까지의 권장 진도를 계산한다(한국 날짜 기준).
   const today = todayInSeoul();
@@ -299,6 +301,7 @@ async function GroupDetail({
                   isMe: member.user_id === user.id,
                 }))}
                 expectedPercent={schedule?.expectedPercent ?? null}
+                pageMap={pageMap}
                 progressForm={
                   <ProgressForm
                     groupId={group.id}

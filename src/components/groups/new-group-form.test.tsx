@@ -43,33 +43,61 @@ describe("그룹 만들기 단계", () => {
     fireEvent.click(screen.getByRole("button", { name: "다음" }));
 
     expect(screen.getByText("책 제목을 입력해 주세요.")).toBeDefined();
-    expect(screen.queryByText("목차 없이 진행할까요?")).toBeNull();
+    expect(heading("3. 그룹 정보")).toBeNull();
   });
 
-  test("목차 없이 다음을 누르면 한 번 알리고, 다시 누르면 3단계로 간다", () => {
+  test("필수 항목은 빨간 필수, 전체 쪽수와 목차는 권장으로 표시한다", () => {
     render(<NewGroupForm />);
     fireEvent.click(
       screen.getByRole("button", { name: "검색 없이 직접 입력" }),
     );
-    fireEvent.change(screen.getByLabelText("책 제목"), {
+    expect(
+      screen.getByLabelText(/^책 제목/).closest("div")!.textContent,
+    ).toContain("필수");
+    expect(
+      screen.getByLabelText(/^전체 쪽수/).closest("div")!.textContent,
+    ).toContain("권장");
+    expect(screen.getByText("목차").parentElement!.textContent).toContain(
+      "권장",
+    );
+  });
+
+  test("전체 쪽수나 목차를 비우고 만들기를 누르면 만들기 전에 한 번 알리고 돌아가 채울 수 있다", () => {
+    actions.createGroup.mockResolvedValue({});
+    render(<NewGroupForm />);
+    fireEvent.click(
+      screen.getByRole("button", { name: "검색 없이 직접 입력" }),
+    );
+    fireEvent.change(screen.getByLabelText(/^책 제목/), {
       target: { value: "소년이 온다" },
     });
-
     fireEvent.click(screen.getByRole("button", { name: "다음" }));
-    expect(screen.getByText("목차 없이 진행할까요?")).toBeDefined();
-    expect(screen.getByText(/스포일러가 생기기\s+쉬워요/)).toBeDefined();
-
-    fireEvent.click(screen.getByRole("button", { name: "목차 없이 다음" }));
-    expect(screen.getByRole("button", { name: "그룹 만들기" })).toBeDefined();
     expect(screen.getByText(/목차 없음/)).toBeDefined();
+    fireEvent.change(screen.getByLabelText(/^그룹 이름/), {
+      target: { value: "봄 독서" },
+    });
+
+    fireEvent.click(screen.getByRole("button", { name: "그룹 만들기" }));
+    expect(
+      screen.getByText(
+        "권장 항목을 비워 두고 만들까요? (비어 있음: 전체 쪽수, 목차)",
+      ),
+    ).toBeDefined();
+    expect(actions.createGroup).not.toHaveBeenCalled();
+
+    // 돌아가서 채우기를 누르면 2단계로 간다.
+    fireEvent.click(
+      screen.getByRole("button", { name: "책 정보로 돌아가 채우기" }),
+    );
+    expect(heading("2. 책 정보와 목차")).not.toBeNull();
   });
 
-  test("목차를 적으면 알림 없이 3단계로 가고, 이전으로 돌아와도 입력이 남는다", () => {
+  test("목차를 적으면 3단계로 가고, 이전으로 돌아와도 입력이 남는다", () => {
     render(<NewGroupForm />);
     fireEvent.click(
       screen.getByRole("button", { name: "검색 없이 직접 입력" }),
     );
-    fireEvent.change(screen.getByLabelText("책 제목"), {
+    fireEvent.change(screen.getByLabelText(/^책 제목/), {
       target: { value: "소년이 온다" },
     });
     fireEvent.change(screen.getByLabelText(/^목차/), {
@@ -77,12 +105,11 @@ describe("그룹 만들기 단계", () => {
     });
 
     fireEvent.click(screen.getByRole("button", { name: "다음" }));
-    expect(screen.queryByText("목차 없이 진행할까요?")).toBeNull();
     expect(screen.getByText(/목차 2개 장/)).toBeDefined();
 
     // 3단계의 이전 버튼(2단계의 것은 숨겨져 있어 역할로는 하나만 잡힌다)
     fireEvent.click(screen.getByRole("button", { name: "이전" }));
-    expect((screen.getByLabelText("책 제목") as HTMLInputElement).value).toBe(
+    expect((screen.getByLabelText(/^책 제목/) as HTMLInputElement).value).toBe(
       "소년이 온다",
     );
     expect(screen.queryByRole("button", { name: "그룹 만들기" })).toBeNull();
