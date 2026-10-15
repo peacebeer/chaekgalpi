@@ -24,6 +24,14 @@ export default function NewGroupPage() {
 }
 
 async function SignedInForm() {
-  await requireUser("/groups/new");
+  const user = await requireUser("/groups/new");
+  if (user.isAnonymous) {
+    return (
+      <p className="bg-muted rounded-lg p-4 text-sm leading-6">
+        체험 중에는 그룹을 만들 수 없어요. 로그아웃한 뒤 가입하면 내 그룹을 만들
+        수 있어요.
+      </p>
+    );
+  }
   return <NewGroupForm />;
 }

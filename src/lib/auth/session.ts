@@ -5,6 +5,8 @@ import { createClient } from "@/lib/supabase/server";
 export type CurrentUser = {
   id: string;
   email: string | null;
+  // 가입 없이 체험하기로 들어온 익명 사용자
+  isAnonymous: boolean;
 };
 
 // 지금 로그인한 사용자. 쿠키를 읽으므로 반드시 <Suspense> 안의 컴포넌트나
@@ -18,6 +20,7 @@ export async function getCurrentUser(): Promise<CurrentUser | null> {
   return {
     id: data.claims.sub,
     email: typeof email === "string" ? email : null,
+    isAnonymous: data.claims.is_anonymous === true,
   };
 }
 

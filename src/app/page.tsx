@@ -1,5 +1,6 @@
 import Link from "next/link";
 
+import { DemoButton } from "@/components/demo/demo-button";
 import { buttonVariants } from "@/components/ui/button";
 import { LIMITS } from "@/lib/validation/limits";
 
@@ -43,6 +44,7 @@ export default function Home() {
             >
               그룹 둘러보기
             </Link>
+            <DemoButton />
           </div>
           <p className="text-muted-foreground/80 text-xs">
             저작권 보호를 위해 인용은 카드 한 장에{" "}

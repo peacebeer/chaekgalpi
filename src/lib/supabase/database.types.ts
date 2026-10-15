@@ -125,6 +125,7 @@ export type Database = {
           created_at: string
           id: string
           invite_code: string
+          is_demo: boolean
           is_public: boolean
           name: string
           owner_id: string | null
@@ -138,6 +139,7 @@ export type Database = {
           created_at?: string
           id?: string
           invite_code?: string
+          is_demo?: boolean
           is_public?: boolean
           name: string
           owner_id?: string | null
@@ -151,6 +153,7 @@ export type Database = {
           created_at?: string
           id?: string
           invite_code?: string
+          is_demo?: boolean
           is_public?: boolean
           name?: string
           owner_id?: string | null
@@ -446,6 +449,7 @@ export type Database = {
         Args: { p_hidden?: boolean; p_note_id: string }
         Returns: undefined
       }
+      is_anonymous_user: { Args: { p_user_id: string }; Returns: boolean }
       is_member: { Args: { p_group_id: string }; Returns: boolean }
       is_owner: { Args: { p_group_id: string }; Returns: boolean }
       join_group: {
@@ -491,6 +495,7 @@ export type Database = {
           text: string
         }[]
       }
+      start_demo: { Args: never; Returns: string }
     }
     Enums: {
       [_ in never]: never

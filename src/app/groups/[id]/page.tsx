@@ -79,7 +79,7 @@ async function GroupDetail({
   const { data: group } = await supabase
     .from("groups")
     .select(
-      "id, name, capacity, start_date, target_date, is_public, invite_code, owner_id, books(title, author, translator, publisher, isbn, pages, source, cover_url, book_chapters(number, title, start_page))",
+      "id, name, capacity, start_date, target_date, is_public, is_demo, invite_code, owner_id, books(title, author, translator, publisher, isbn, pages, source, cover_url, book_chapters(number, title, start_page))",
     )
     .eq("id", groupId.data)
     .maybeSingle();
@@ -220,6 +220,13 @@ async function GroupDetail({
               </p>
             </div>
           </header>
+          {group.is_demo && me && (
+            <p className="bg-highlight text-highlight-foreground rounded-lg px-4 py-3 text-sm leading-6">
+              체험 그룹이에요. 서연·도윤은 예시 회원이고, 내 진도는 1장 60%예요.
+              흐리게 잠긴 글은 아직 안 읽은 곳의 글이에요.{" "}
+              <strong>내 진도 기록</strong>에서 2장 이상으로 올리면 열려요.
+            </p>
+          )}
           {me ? (
             <nav aria-label="그룹 화면" className="flex gap-1 overflow-x-auto">
               {TABS.map(([key, label]) => (
@@ -447,13 +454,15 @@ async function GroupDetail({
                   )}
                 </section>
 
-                <section className="flex flex-col gap-3">
-                  <h2 className="text-lg font-semibold">초대 링크</h2>
-                  <InviteLink code={group.invite_code} />
-                  <p className="text-muted-foreground text-sm">
-                    이 링크를 받은 사람은 로그인한 뒤 그룹에 들어올 수 있어요.
-                  </p>
-                </section>
+                {!group.is_demo && (
+                  <section className="flex flex-col gap-3">
+                    <h2 className="text-lg font-semibold">초대 링크</h2>
+                    <InviteLink code={group.invite_code} />
+                    <p className="text-muted-foreground text-sm">
+                      이 링크를 받은 사람은 로그인한 뒤 그룹에 들어올 수 있어요.
+                    </p>
+                  </section>
+                )}
 
                 {!isOwner && (
                   <section className="flex flex-col gap-2 border-t pt-6">
