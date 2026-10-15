@@ -103,7 +103,7 @@ MVP는 그룹 만들기, 진도 기록, 진도 잠금 메모 세 가지가 동�
 
 | 엔티티 | 주요 필드 |
 | --- | --- |
-| User | id, 닉네임, 이메일, 지역(도서관 조회용) |
+| User | id, 닉네임, 이메일 (지역은 받지 않기로 함, 2026-10-15) |
 | Book (대표 도서) | id, ISBN, 제목, 저자, 역자, 출판사, 출처(국립중앙도서관·직접 입력) |
 | BookChapter | book\_id, 장 번호, 장 제목, 시작 쪽(선택) |
 | Group | id, book\_id, 리더, 정원(최대 8), 시작일, 목표 완독일, 공개 여부 |
@@ -212,7 +212,7 @@ GitHub 저장소는 공개로 운영한다(포트폴리오 공개, 보안 기능
 
 | 테이블 | 주요 컬럼 | 비고 |
 | --- | --- | --- |
-| profiles | id(= 인증 사용자 id), nickname, region, created\_at | 회원 가입 시 자동 생성 |
+| profiles | id(= 인증 사용자 id), nickname, created\_at | 회원 가입 시 자동 생성 (region은 2026-10-15에 삭제) |
 | books | id, isbn, title, author, translator, publisher, source(nlk·manual), created\_by | 대표 도서. 같은 ISBN이면 여러 그룹이 재사용 |
 | book\_chapters | book\_id, number, title, start\_page | (book\_id, number) 고유. start\_page는 선택 |
 | groups | id, book\_id, owner\_id, name, capacity(3–8), start\_date, target\_date, is\_public, invite\_code(고유), quote\_limit(기본 10,000) | owner가 그룹 리더 |

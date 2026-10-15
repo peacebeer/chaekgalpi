@@ -1,6 +1,6 @@
 import { z } from "zod";
 
-import { boundedText, optionalText } from "./common";
+import { boundedText } from "./common";
 import { LIMITS } from "./limits";
 
 export const nicknameSchema = boundedText(
@@ -11,10 +11,6 @@ export const nicknameSchema = boundedText(
 
 export const profileSchema = z.object({
   nickname: nicknameSchema,
-  region: optionalText(
-    LIMITS.regionMax,
-    `지역은 ${LIMITS.regionMax}자까지 입력할 수 있어요.`,
-  ),
 });
 
 export type ProfileInput = z.infer<typeof profileSchema>;

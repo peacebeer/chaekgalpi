@@ -21,7 +21,6 @@ export default function PrivacyPage() {
           <li>
             구글로 로그인할 때: 구글 계정의 이메일 주소, 이름, 프로필 사진 주소
           </li>
-          <li>직접 적을 때만: 활동 지역</li>
           <li>
             서비스를 쓰면서 생기는 정보: 만든·들어간 그룹, 읽은 진도, 인용
             카드·감상·답글·좋아요
@@ -97,9 +96,9 @@ export default function PrivacyPage() {
       <section>
         <h2>7. 내 정보에 대한 권리</h2>
         <p>
-          닉네임과 지역은 프로필 화면에서 직접 고칠 수 있어요. 내 정보 열람,
-          정정, 삭제, 처리 정지와 탈퇴는 아래 문의 창구로 요청하면 지체 없이
-          처리해요. 만 14세 미만은 가입할 수 없어요.
+          닉네임은 프로필 화면에서 직접 고칠 수 있어요. 내 정보 열람, 정정,
+          삭제, 처리 정지와 탈퇴는 아래 문의 창구로 요청하면 지체 없이 처리해요.
+          만 14세 미만은 가입할 수 없어요.
         </p>
       </section>
 
@@ -107,12 +106,7 @@ export default function PrivacyPage() {
         <h2>8. 개인정보 보호 책임자와 문의</h2>
         <p>
           책임자: {SITE.name} 운영자 · 문의:{" "}
-          <a
-            href={SITE.contactUrl}
-            className="underline"
-            target="_blank"
-            rel="noreferrer"
-          >
+          <a href={SITE.contactUrl} className="underline">
             {SITE.contactLabel}
           </a>
         </p>

@@ -19,12 +19,7 @@ export function SiteFooter() {
           >
             개인정보처리방침
           </Link>
-          <a
-            href={SITE.contactUrl}
-            className={LINK}
-            target="_blank"
-            rel="noreferrer"
-          >
+          <a href={SITE.contactUrl} className={LINK}>
             문의
           </a>
           <a

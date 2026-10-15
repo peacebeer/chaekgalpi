@@ -108,12 +108,7 @@ export default function TermsPage() {
         <h2>8. 문의와 약관 변경</h2>
         <p>
           문의:{" "}
-          <a
-            href={SITE.contactUrl}
-            className="underline"
-            target="_blank"
-            rel="noreferrer"
-          >
+          <a href={SITE.contactUrl} className="underline">
             {SITE.contactLabel}
           </a>
           . 약관이 바뀌면 시행 7일 전부터 이 화면에 알려요.
