@@ -6,7 +6,7 @@
 ## 스택
 
 - Next.js 16 (App Router, Turbopack), TypeScript strict, Node.js 20.9 이상
-- Supabase: Postgres + Auth(구글, 이메일) + Realtime. 클라이언트는 `@supabase/ssr`
+- Supabase: Postgres + Auth(구글, 이메일). 클라이언트는 `@supabase/ssr` (Realtime은 보류)
 - Tailwind CSS + shadcn/ui, 모바일 우선 반응형
 - 검증: Zod / 테스트: Vitest(단위), Playwright(E2E), pgTAP(DB)
 - 린트·포맷: ESLint(+ eslint-config-prettier) + Prettier(+ prettier-plugin-tailwindcss)
@@ -28,14 +28,14 @@
 
 ## 절대 규칙 (보안·저작권)
 
-1. **비밀값:** `NEXT_PUBLIC_` 접두어는 Supabase URL과 Publishable key에만 쓴다. `NLK_API_KEY`(국립중앙도서관), Supabase Secret/service_role 키에는 절대 붙이지 않는다. 키를 코드·테스트·로그에 직접 쓰지 않는다. `.env.local`은 커밋하지 않는다.
+1. **비밀값:** `NEXT_PUBLIC_` 접두어는 Supabase URL과 Publishable key에만 쓴다. `NLK_API_KEY`(국립중앙도서관), `KAKAO_REST_API_KEY`(카카오 책 검색), Supabase Secret/service_role 키에는 절대 붙이지 않는다. 키를 코드·테스트·로그에 직접 쓰지 않는다. `.env.local`은 커밋하지 않는다.
 2. **Secret/service_role 키 사용 금지(MVP):** 모든 데이터 접근은 로그인 사용자 권한으로 하고 RLS가 지키게 한다. RLS를 우회하는 코드를 쓰지 않는다.
 3. **DB 변경은 새 마이그레이션으로만:** `npx supabase migration new <이름>`으로 파일을 만든다. 이미 있는 `supabase/migrations/*.sql`은 수정하지 않는다.
 4. **새 테이블:** RLS를 켜고, 정책을 쓰고, `anon`/`authenticated` 기본 권한을 필요한 컬럼만 남기도록 정리하고, `supabase/tests/database/`에 pgTAP 테스트를 추가한다.
 5. **새 DB 함수:** `security definer`면 `set search_path = ''`와 스키마 명시(`public.`)를 지킨다. 만든 뒤 `revoke all on function ... from public, anon, authenticated;` 하고 필요한 것만 `grant execute ... to authenticated;`.
 6. **입력 검증:** 서버(Server Action·Route Handler)에서 받는 모든 값은 Zod로 `parse`한다. 화면 폼 검증은 같은 스키마를 재사용한다.
 7. **저작권:** 책 본문 파일(PDF·EPUB 등)이나 페이지 사진을 올리는 기능을 만들지 않는다. 인용은 카드당 300자, 그룹당 합계 10,000자, 등록 시 본인 감상 필수.
-8. **외부 API:** 국립중앙도서관 API는 서버에서만 호출한다(Route Handler 또는 Server Action). 응답은 Zod로 검사하고, 실패하면 "직접 입력" 흐름으로 넘긴다.
+8. **외부 API:** 카카오 책 검색과 국립중앙도서관 API는 서버에서만 호출한다(Route Handler 또는 Server Action). 응답은 Zod로 검사하고, 실패하면 "직접 입력" 흐름으로 넘긴다. 책 검색·표지는 카카오(`src/lib/kakao`), 목차·전체 쪽수는 국립중앙도서관(`src/lib/nlk`)에서 가져온다. 표지는 이미지 파일을 저장하지 않고 카카오 이미지 서버의 https 주소만 `books.cover_url`에 적는다.
 
 ## 데이터 모델 요약
 
@@ -67,6 +67,12 @@
 | 좋아요 / 취소 | `reactions` INSERT `{ note_id }` / DELETE |
 | 흐림 처리 개수 | `rpc('locked_counts', { p_group_id })` → 장별 잠긴 카드·감상 수 (본문 없음) |
 | 리더의 감상 숨기기 | `rpc('hide_note', { p_note_id, p_hidden })` |
+| 내 글 수정·삭제 | `notes` UPDATE (body, kind) / DELETE (작성자만) |
+| 인용문 수정 | `quotes` UPDATE (text). 등록자는 잠기기 전 자유롭게, 잠긴 뒤와 리더는 오타 수정(10자 이내)만 |
+| 인용 카드 삭제 | 등록자: `quotes` DELETE (잠기기 전만) / 리더: `rpc('remove_quote', { p_quote_id })` |
+| 그룹 인용 한도 사용량 | `rpc('quote_usage', { p_group_id })` → `{ used, quote_limit }` (잠긴 카드 포함) |
+| 입장 전 그룹 소개 | `rpc('group_preview', { p_invite_code })` 또는 `{ p_group_id }`(공개 그룹) → 이름·리더·기간·책·목차 |
+| 그룹 정보 수정·삭제, 회원 내보내기·나가기 | `groups` UPDATE/DELETE (리더), `memberships` DELETE (본인 또는 리더) |
 
 잠긴(아직 못 읽은 위치의) 카드·감상은 RLS 때문에 조회 결과에 **아예 나오지 않는다.** 화면의 흐린 자리는 `locked_counts`로 그린다. 프런트에서 내용을 가리는 방식으로 구현하지 않는다.
 
@@ -115,7 +121,29 @@ DB 함수는 아래 영어 키를 예외 메시지로 던진다. `src/lib/errors
 - **M4 교환:** 인용 카드 등록과 비슷한 카드 추천, 카드 감상, 위치 메모·질문, 답글, 좋아요, 흐림 처리, 리더 숨기기
 - **M5 실시간:** quotes·notes·reactions·memberships 변경 구독으로 새로고침 없이 반영
   - **보류(2026-10-13 결정):** 비동기 교환이 핵심이라 MVP에서 뺐다. 구현은 `feat/m5-realtime` 브랜치에 남아 있고 main에는 합치지 않았다. 다시 넣을 때는 자동 새로고침 대신 "새 글이 있어요" 버튼 방식도 검토한다.
+  - 실시간 없이도 화면은 Server Action 뒤 `refresh()`로 다시 그린다.
 - **M6 E2E:** "A 그룹 생성 → B 초대 입장 → A가 2장 카드 등록 → 1장 읽는 B에게 흐림 → B 진도 2장 → 카드 보임" 흐름. CI에 E2E 잡 추가
+
+## 현재 상태 (2026-10-13)
+
+M0~M4, M6을 마쳤고 M5는 보류했다. 그 뒤 추가한 것:
+
+- 그룹 설정(정보 수정, 회원 내보내기·나가기, 그룹 삭제), 3단계 그룹 만들기, 목차 선택 입력(없으면 "책 전체" 한 장)
+- 카카오 책 검색(한 검색창, 표지, 더 보기), 그룹 목록 검색, 입장 전 그룹 소개
+- 읽는 기간 달력과 권장 진도(`src/lib/books/schedule.ts`), 앱 안 알림(`/notifications`, 계산식, 테이블 없음)
+- 디자인: 색·글꼴은 `src/app/globals.css`와 `src/app/layout.tsx` 한 곳에서 정한다. 화면에 색 값을 직접 쓰지 말고 토큰(`bg-card`, `text-primary`, `font-quote` 등)을 쓴다.
+
+**작업 방식 메모**
+
+- Docker가 없는 환경이라 pgTAP은 CI에서만 돈다. 마이그레이션을 바꿀 때는 테스트를 함께 쓰고, PR의 `pgtap` 검사로 확인한다.
+- 두 회원 흐름 E2E(`e2e/progress-lock.spec.ts`)는 `.env.local`의 `E2E_USER_*` 계정이 있을 때만 돈다. CI는 임시 로컬 Supabase에 계정을 만들어 돌린다.
+- 하나의 버튼 묶음 안의 펼침 칸(수정·답글·삭제 확인)은 `ActionGroup`(`src/components/action-group.tsx`) 안에 두어 한 번에 하나만 열리게 한다.
+
+**미뤄 둔 것**
+
+- 목차 입력 부담 줄이기, ISBN 하나에 목차 여러 벌 두고 고르기
+- 이메일·웹 푸시 알림, 주차별 읽기 범위, 내보낸 회원 재입장 차단
+- Vercel 배포와 그 뒤의 운영 준비(PRD "배포 실습")
 
 <!-- BEGIN:nextjs-agent-rules -->
 
