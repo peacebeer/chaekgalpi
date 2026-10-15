@@ -47,6 +47,8 @@ jobs:
     env:
       # 이 작업에서만 쓰고 버리는 로컬 DB용 값이다. 실제 계정이나 비밀값이 아니다.
       E2E_CREATE_USERS: "1"
+      # 로컬 Supabase(config.toml)는 익명 로그인이 켜져 있어 체험하기 E2E도 돈다.
+      E2E_DEMO: "1"
       E2E_USER_A_EMAIL: leader@e2e.test
       E2E_USER_A_PASSWORD: local-only-leader-pw
       E2E_USER_B_EMAIL: member@e2e.test

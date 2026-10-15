@@ -93,6 +93,11 @@ async function UserMenu() {
           </span>
         )}
       </Link>
+      {user.isAnonymous && (
+        <span className="text-primary rounded-md bg-white px-2 py-0.5 text-xs font-semibold">
+          체험 중
+        </span>
+      )}
       <Link
         href="/profile"
         className={buttonVariants({

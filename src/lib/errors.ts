@@ -29,6 +29,10 @@ export const ERROR_MESSAGES = {
   note_parent_invalid: CANNOT_REPLY,
   note_quote_invalid: CANNOT_REPLY,
   reply_depth_exceeded: CANNOT_REPLY,
+  anonymous_not_allowed:
+    "체험 중에는 다른 그룹에 들어갈 수 없어요. 가입하면 함께 읽을 수 있어요.",
+  demo_group_closed: "체험용 그룹이라 들어갈 수 없어요.",
+  demo_anonymous_only: "이미 로그인했어요. 내 그룹에서 계속해 주세요.",
   "42501": "권한이 없어요.",
   "23505": "이미 처리됐어요.",
 } as const;
@@ -47,6 +51,7 @@ export const AUTH_ERROR_MESSAGES = {
   over_request_rate_limit: "요청이 너무 많아요. 잠시 후 다시 시도해 주세요.",
   signup_disabled: "지금은 새로 가입할 수 없어요.",
   provider_disabled: "이 로그인 방법은 아직 준비 중이에요.",
+  anonymous_provider_disabled: "체험하기는 아직 준비 중이에요.",
   // /auth/callback에서 로그인 마무리에 실패했을 때 쓰는 우리 쪽 키
   auth_callback_failed:
     "로그인을 마치지 못했어요. 링크를 연 브라우저가 처음과 같은지 확인하고 다시 시도해 주세요.",
