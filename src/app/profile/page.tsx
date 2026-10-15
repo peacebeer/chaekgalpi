@@ -29,7 +29,7 @@ async function ProfileSection() {
   const supabase = await createClient();
   const { data: profile } = await supabase
     .from("profiles")
-    .select("nickname, region")
+    .select("nickname")
     .eq("id", user.id)
     .maybeSingle();
 
@@ -40,10 +40,7 @@ async function ProfileSection() {
           로그인 계정: {user.email}
         </p>
       )}
-      <ProfileForm
-        nickname={profile?.nickname ?? ""}
-        region={profile?.region ?? ""}
-      />
+      <ProfileForm nickname={profile?.nickname ?? ""} />
     </>
   );
 }

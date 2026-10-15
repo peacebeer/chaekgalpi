@@ -10,11 +10,10 @@ import { LIMITS } from "@/lib/validation/limits";
 
 type ProfileFormProps = {
   nickname: string;
-  region: string;
 };
 
-export function ProfileForm({ nickname, region }: ProfileFormProps) {
-  const initialState: FormState = { values: { nickname, region } };
+export function ProfileForm({ nickname }: ProfileFormProps) {
+  const initialState: FormState = { values: { nickname } };
   const [state, formAction, pending] = useActionState(
     updateProfile,
     initialState,
@@ -31,14 +30,6 @@ export function ProfileForm({ nickname, region }: ProfileFormProps) {
         error={state.fieldErrors?.nickname}
         hint={`그룹에서 다른 회원에게 보이는 이름이에요. ${LIMITS.nicknameMax}자까지`}
         required
-      />
-      <Field
-        name="region"
-        label="지역 (선택)"
-        maxLength={LIMITS.regionMax}
-        defaultValue={state.values?.region}
-        error={state.fieldErrors?.region}
-        hint="나중에 가까운 도서관을 찾을 때 써요. 예: 서울 마포구"
       />
 
       {state.error && (

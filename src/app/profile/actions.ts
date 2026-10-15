@@ -15,7 +15,6 @@ export async function updateProfile(
   const user = await requireUser("/profile");
   const values = {
     nickname: textOf(formData, "nickname"),
-    region: textOf(formData, "region"),
   };
 
   const parsed = profileSchema.safeParse(values);
@@ -35,9 +34,6 @@ export async function updateProfile(
   refresh();
   return {
     notice: "저장했어요.",
-    values: {
-      nickname: parsed.data.nickname,
-      region: parsed.data.region ?? "",
-    },
+    values: { nickname: parsed.data.nickname },
   };
 }

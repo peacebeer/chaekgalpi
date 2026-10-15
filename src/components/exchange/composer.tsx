@@ -9,13 +9,14 @@ import {
   type SimilarQuote,
 } from "@/app/groups/[id]/exchange-actions";
 import {
-  maxPctFor,
+  initialPosition,
   PositionPicker,
   type PickerProgress,
 } from "@/components/exchange/position-picker";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
+import type { PageMap } from "@/lib/books/pages";
 import { positionLabel } from "@/lib/books/progress";
 import { KIND_LABELS } from "@/lib/exchange/feed";
 import { EMPTY_FORM_STATE, type FormState } from "@/lib/form-state";
@@ -30,6 +31,8 @@ type ComposerProps = {
   progress: PickerProgress;
   // 그룹 인용 한도 사용량(아직 못 읽은 카드 포함). 불러오지 못했으면 null
   quota?: { used: number; limit: number } | null;
+  // 쪽수로 위치를 받을 수 있으면(모든 장의 시작 쪽과 전체 쪽수를 알면) 그 정보
+  pageMap?: PageMap | null;
 };
 
 type Mode = "quote" | "note";
@@ -44,12 +47,12 @@ export function Composer({
   wholeBook,
   progress,
   quota = null,
+  pageMap = null,
 }: ComposerProps) {
   const [mode, setMode] = useState<Mode>("quote");
-  const [position, setPosition] = useState({
-    chapter: progress.chapter,
-    pct: maxPctFor(progress.chapter, progress),
-  });
+  const [position, setPosition] = useState(() =>
+    initialPosition(progress, pageMap),
+  );
   const [text, setText] = useState("");
   const [body, setBody] = useState("");
   const [kind, setKind] = useState("memo");
@@ -137,6 +140,7 @@ export function Composer({
           progress={progress}
           value={position}
           onChange={setPosition}
+          pageMap={pageMap}
         />
       )}
 

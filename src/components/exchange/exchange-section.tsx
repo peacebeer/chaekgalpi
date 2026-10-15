@@ -21,6 +21,7 @@ import {
   type LineMember,
 } from "@/components/groups/progress-line";
 import { Button } from "@/components/ui/button";
+import { positionToPage, type PageMap } from "@/lib/books/pages";
 import { positionLabel } from "@/lib/books/progress";
 import {
   buildFeed,
@@ -46,6 +47,8 @@ type ExchangeSectionProps = {
   expectedPercent: number | null;
   // "진도 기록" 버튼을 누르면 펼쳐질 입력 칸
   progressForm: ReactNode;
+  // 쪽수로 위치를 주고받을 수 있으면 그 정보(없으면 장 + %)
+  pageMap: PageMap | null;
 };
 
 const FORMER_MEMBER = "나간 회원";
@@ -81,6 +84,7 @@ export async function ExchangeSection({
   members,
   expectedPercent,
   progressForm,
+  pageMap,
 }: ExchangeSectionProps) {
   const supabase = await createClient();
   const [{ data: quotes }, { data: notes }, { data: locked }, { data: usage }] =
@@ -277,7 +281,9 @@ export async function ExchangeSection({
     const where =
       chapter === null
         ? "책 전체"
-        : positionLabel({ chapter, pct: thread.pct }, wholeBook);
+        : pageMap
+          ? `${wholeBook ? "" : `${chapter}장 · `}${positionToPage(pageMap, { chapter, pct: thread.pct })}쪽`
+          : positionLabel({ chapter, pct: thread.pct }, wholeBook);
 
     if (thread.type === "note") {
       return (
@@ -468,6 +474,7 @@ export async function ExchangeSection({
                     wholeBook={wholeBook}
                     progress={progress}
                     quota={quota}
+                    pageMap={pageMap}
                   />
                 ),
               },

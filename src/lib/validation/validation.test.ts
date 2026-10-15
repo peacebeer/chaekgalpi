@@ -105,7 +105,6 @@ describe("프로필", () => {
   test("닉네임 앞뒤 공백을 떼고 1~30자를 받는다", () => {
     expect(profileSchema.parse({ nickname: "  지은  " })).toEqual({
       nickname: "지은",
-      region: null,
     });
     expect(profileSchema.safeParse({ nickname: "가".repeat(30) }).success).toBe(
       true,
