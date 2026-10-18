@@ -20,6 +20,7 @@ import type { PageMap } from "@/lib/books/pages";
 import { positionLabel } from "@/lib/books/progress";
 import { KIND_LABELS } from "@/lib/exchange/feed";
 import { EMPTY_FORM_STATE, type FormState } from "@/lib/form-state";
+import { submitKeepingInputs } from "@/lib/form-submit";
 import { charLength } from "@/lib/validation/common";
 import { remainingQuoteChars } from "@/lib/validation/quote";
 import { LIMITS } from "@/lib/validation/limits";
@@ -96,7 +97,11 @@ export function Composer({
   }, [groupId, mode, position.chapter, position.pct, text, textLength]);
 
   return (
-    <form action={formAction} className="flex flex-col gap-4" noValidate>
+    <form
+      onSubmit={submitKeepingInputs(formAction)}
+      className="flex flex-col gap-4"
+      noValidate
+    >
       <input type="hidden" name="groupId" value={groupId} />
 
       <div className="flex gap-2" role="tablist" aria-label="글 종류">

@@ -4,6 +4,7 @@ import {
   buildPageMap,
   maxPageFor,
   pageToPosition,
+  placeLabel,
   positionToPage,
 } from "./pages";
 
@@ -74,5 +75,18 @@ describe("maxPageFor", () => {
   test("장 끝까지 읽어도 다음 장 첫 쪽은 고를 수 없고, 완독이면 마지막 쪽까지", () => {
     expect(maxPageFor(map, { chapter: 1, pct: 100, finished: false })).toBe(42);
     expect(maxPageFor(map, { chapter: 1, pct: 0, finished: true })).toBe(189);
+  });
+});
+
+describe("placeLabel", () => {
+  test("쪽수를 알면 쪽으로, 모르면 %로, 장 없는 글은 책 전체로 표시한다", () => {
+    expect(placeLabel({ chapter: 2, pct: 50 }, false, map)).toBe("2장 · 77쪽");
+    expect(placeLabel({ chapter: 2, pct: 40.4 }, false, null)).toBe(
+      "2장 · 40%",
+    );
+    expect(placeLabel({ chapter: 1, pct: 40 }, true, null)).toBe("40%");
+    expect(placeLabel({ chapter: null, pct: null }, false, map)).toBe(
+      "책 전체",
+    );
   });
 });

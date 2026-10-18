@@ -17,6 +17,16 @@ test("체험하기로 들어가 진도를 올리면 잠긴 글이 열린다", as
   // 2장 카드는 내 진도(1장 60%)보다 뒤라 내용이 아예 내려오지 않는다.
   expect(await page.content()).not.toContain(SECOND_CHAPTER_QUOTE);
 
+  // 토론 준비: 내가 읽은 범위(1장)의 이야기 거리만 모인다.
+  await page.getByRole("link", { name: "토론 준비" }).click();
+  await expect(page.getByRole("heading", { name: "토론 준비" })).toBeVisible();
+  await expect(page.getByText(/서점 이름이 왜 끝까지/)).toBeVisible();
+  await expect(
+    page.getByText("체험 독자 (나) 님은 아직 1장을", { exact: false }),
+  ).toBeVisible();
+  expect(await page.content()).not.toContain(SECOND_CHAPTER_QUOTE);
+  await page.getByRole("link", { name: "인용과 감상" }).click();
+
   // 진도를 2장 50%로 올린다. 막대는 fill로 채울 수 없어 값을 넣고 input 이벤트를 보낸다.
   await page.getByRole("button", { name: "내 진도 기록" }).click();
   const panel = page.locator("#tool-progress");
@@ -31,8 +41,21 @@ test("체험하기로 들어가 진도를 올리면 잠긴 글이 열린다", as
   });
   await panel.getByRole("button", { name: "진도 저장" }).click();
   await expect(panel.getByText("진도를 저장했어요")).toBeVisible();
+  // 저장한 뒤에도 고른 값이 그대로 보여야 한다(폼 자동 초기화로 1장으로 돌아가던 문제).
+  await expect(panel.getByLabel("읽고 있는 장")).toHaveValue("2");
 
   await expect(page.getByText(SECOND_CHAPTER_QUOTE)).toBeVisible();
+
+  // 완독을 저장하면 체크가 유지되고, 풀어서 다시 저장하면 풀린 채로 남는다.
+  const finished = panel.getByRole("checkbox");
+  await finished.check();
+  await panel.getByRole("button", { name: "진도 저장" }).click();
+  await expect(panel.getByText(/완독을 기록했어요/)).toBeVisible();
+  await expect(finished).toBeChecked();
+  await finished.uncheck();
+  await panel.getByRole("button", { name: "진도 저장" }).click();
+  await expect(panel.getByText("진도를 저장했어요")).toBeVisible();
+  await expect(finished).not.toBeChecked();
 
   await page.getByRole("button", { name: "로그아웃" }).click();
   await expect(page.getByRole("link", { name: "로그인" })).toBeVisible();

@@ -3,6 +3,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { Suspense } from "react";
 
+import { DiscussionSection } from "@/components/exchange/discussion-section";
 import { ExchangeSection } from "@/components/exchange/exchange-section";
 import { BookCover } from "@/components/groups/book-cover";
 import { ConfirmAction } from "@/components/groups/confirm-action";
@@ -18,6 +19,7 @@ import { buttonVariants } from "@/components/ui/button";
 import { requireUser } from "@/lib/auth/session";
 import { isWholeBook } from "@/lib/books/chapters";
 import { buildPageMap } from "@/lib/books/pages";
+import { clampRange, defaultRange } from "@/lib/exchange/discussion";
 import { overallPercent, positionLabel } from "@/lib/books/progress";
 import {
   buildCalendar,
@@ -35,6 +37,7 @@ export const metadata: Metadata = { title: "그룹 · 책갈피" };
 // 회원에게 보이는 화면 갈래. 주소의 ?tab= 값으로 고른다.
 const TABS = [
   ["feed", "인용과 감상"],
+  ["discuss", "토론 준비"],
   ["progress", "진도 현황"],
   ["book", "책 정보"],
   ["info", "그룹 정보"],
@@ -68,7 +71,8 @@ async function GroupDetail({
   const groupId = uuidSchema.safeParse(id);
   if (!groupId.success) notFound();
 
-  const requested = (await searchParams).tab;
+  const query = await searchParams;
+  const requested = query.tab;
   const tab: Tab =
     TABS.map(([key]) => key).find((key) => key === requested) ?? "feed";
 
@@ -324,6 +328,38 @@ async function GroupDetail({
                     }}
                   />
                 }
+              />
+            )}
+
+            {tab === "discuss" && (
+              <DiscussionSection
+                groupId={group.id}
+                chapters={chapterOptions}
+                wholeBook={wholeBook}
+                members={memberList.map((member) => ({
+                  id: member.user_id,
+                  // 토론 준비 화면에서는 나를 알아보기 쉽게 표시한다.
+                  nickname: `${member.profiles?.nickname ?? "독자"}${member.user_id === user.id ? " (나)" : ""}`,
+                  chapter: member.progress_chapter,
+                  pct: Number(member.progress_pct),
+                  finished: Boolean(member.finished_at),
+                }))}
+                range={
+                  query.from && query.to
+                    ? clampRange(
+                        Number(query.from),
+                        Number(query.to),
+                        chapters.length,
+                      )
+                    : defaultRange(
+                        {
+                          chapter: me.progress_chapter,
+                          finished: Boolean(me.finished_at),
+                        },
+                        chapters.length,
+                      )
+                }
+                pageMap={pageMap}
               />
             )}
 

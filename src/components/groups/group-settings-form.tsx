@@ -6,6 +6,7 @@ import { updateGroup } from "@/app/groups/[id]/settings/actions";
 import { Field } from "@/components/auth/field";
 import { Button } from "@/components/ui/button";
 import { EMPTY_FORM_STATE } from "@/lib/form-state";
+import { submitKeepingInputs } from "@/lib/form-submit";
 import { LIMITS } from "@/lib/validation/limits";
 
 type GroupSettingsFormProps = {
@@ -37,7 +38,11 @@ export function GroupSettingsForm({
   const errors = state.fieldErrors ?? {};
 
   return (
-    <form action={formAction} className="flex flex-col gap-4" noValidate>
+    <form
+      onSubmit={submitKeepingInputs(formAction)}
+      className="flex flex-col gap-4"
+      noValidate
+    >
       <input type="hidden" name="groupId" value={groupId} />
       <Field
         name="name"

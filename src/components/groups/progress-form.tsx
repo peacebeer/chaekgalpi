@@ -11,6 +11,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { positionLabel } from "@/lib/books/progress";
 import { EMPTY_FORM_STATE } from "@/lib/form-state";
+import { submitKeepingInputs } from "@/lib/form-submit";
 
 type ProgressFormProps = {
   groupId: string;
@@ -65,7 +66,10 @@ export function ProgressForm({
   }
 
   return (
-    <form action={formAction} className="flex flex-col gap-4">
+    <form
+      onSubmit={submitKeepingInputs(formAction)}
+      className="flex flex-col gap-4"
+    >
       <input type="hidden" name="groupId" value={groupId} />
       {/* 완독이면 서버가 위치를 책 끝으로 맞춘다 */}
       <input type="hidden" name="chapter" value={chapter} />

@@ -19,6 +19,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { parseChapterLines } from "@/lib/books/chapters";
 import type { TocVersion } from "@/lib/books/versions";
 import { EMPTY_FORM_STATE, type FormState } from "@/lib/form-state";
+import { submitKeepingInputs } from "@/lib/form-submit";
 import { LIMITS } from "@/lib/validation/limits";
 
 const EMPTY_BOOK = {
@@ -384,7 +385,6 @@ export function NewGroupForm() {
       )}
 
       <form
-        action={formAction}
         // 단계가 바뀌어도 입력값이 함께 제출되도록 지우지 않고 숨기기만 한다.
         hidden={step === 1}
         className="flex flex-col gap-6"
@@ -398,7 +398,9 @@ export function NewGroupForm() {
           if (missingRecommended.length > 0 && !confirmMissing) {
             event.preventDefault();
             setConfirmMissing(true);
+            return;
           }
+          submitKeepingInputs(formAction)(event);
         }}
         noValidate
       >
