@@ -150,7 +150,7 @@ export async function DiscussionSection({
   return (
     <div className="flex flex-col gap-4">
       <section className="flex flex-col gap-3">
-        <h2 className="text-lg font-semibold">토론 준비</h2>
+        <h2 className="text-lg font-semibold">토론 준비 도우미</h2>
         {!wholeBook && (
           <form
             method="get"
