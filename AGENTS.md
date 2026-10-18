@@ -132,6 +132,7 @@ M0~M4, M6을 마쳤고 M5는 보류했다. 그 뒤 추가한 것:
 - 그룹 설정(정보 수정, 회원 내보내기·나가기, 그룹 삭제), 3단계 그룹 만들기, 목차 선택 입력(없으면 "책 전체" 한 장)
 - 카카오 책 검색(한 검색창, 표지, 더 보기), 그룹 목록 검색, 입장 전 그룹 소개
 - 읽는 기간 달력과 권장 진도(`src/lib/books/schedule.ts`), 앱 안 알림(`/notifications`, 계산식, 테이블 없음)
+- 토론 준비 탭(`?tab=discuss&from=&to=`, `src/lib/exchange/discussion.ts`): AI 없이 RLS로 읽은 글만 집계한다. 나중에 AI 정리를 붙일 때도 이 결과를 재료로 쓰고, AI 호출부는 교체 가능하게(가짜 AI·Ollama·유료 API) 만든다
 - 디자인: 색·글꼴은 `src/app/globals.css`와 `src/app/layout.tsx` 한 곳에서 정한다. 화면에 색 값을 직접 쓰지 말고 토큰(`bg-card`, `text-primary`, `font-quote` 등)을 쓴다.
 
 **작업 방식 메모**

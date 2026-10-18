@@ -87,3 +87,20 @@ export function maxPageFor(
   }
   return Math.min(page, map.pages);
 }
+
+// 글 위치 표시: 쪽수를 알면 "2장 · 77쪽"(목차 없는 책은 "77쪽"), 모르면 "2장 · 40%".
+// chapter가 없으면 책 전체(완독자에게만 보이는 글)다.
+export function placeLabel(
+  position: { chapter: number | null; pct: number | null },
+  wholeBook: boolean,
+  pageMap: PageMap | null,
+): string {
+  if (position.chapter === null) return "책 전체";
+  const at = { chapter: position.chapter, pct: position.pct ?? 0 };
+  if (!pageMap) {
+    const pct = `${Math.round(at.pct)}%`;
+    return wholeBook ? pct : `${at.chapter}장 · ${pct}`;
+  }
+  const page = `${positionToPage(pageMap, at)}쪽`;
+  return wholeBook ? page : `${at.chapter}장 · ${page}`;
+}

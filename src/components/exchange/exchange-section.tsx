@@ -21,8 +21,7 @@ import {
   type LineMember,
 } from "@/components/groups/progress-line";
 import { Button } from "@/components/ui/button";
-import { positionToPage, type PageMap } from "@/lib/books/pages";
-import { positionLabel } from "@/lib/books/progress";
+import { placeLabel, type PageMap } from "@/lib/books/pages";
 import {
   buildFeed,
   kindLabel,
@@ -278,12 +277,7 @@ export async function ExchangeSection({
   };
 
   const renderThread = (thread: FeedThread, chapter: number | null) => {
-    const where =
-      chapter === null
-        ? "책 전체"
-        : pageMap
-          ? `${wholeBook ? "" : `${chapter}장 · `}${positionToPage(pageMap, { chapter, pct: thread.pct })}쪽`
-          : positionLabel({ chapter, pct: thread.pct }, wholeBook);
+    const where = placeLabel({ chapter, pct: thread.pct }, wholeBook, pageMap);
 
     if (thread.type === "note") {
       return (

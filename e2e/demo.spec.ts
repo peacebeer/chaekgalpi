@@ -17,6 +17,16 @@ test("체험하기로 들어가 진도를 올리면 잠긴 글이 열린다", as
   // 2장 카드는 내 진도(1장 60%)보다 뒤라 내용이 아예 내려오지 않는다.
   expect(await page.content()).not.toContain(SECOND_CHAPTER_QUOTE);
 
+  // 토론 준비: 내가 읽은 범위(1장)의 이야기 거리만 모인다.
+  await page.getByRole("link", { name: "토론 준비" }).click();
+  await expect(page.getByRole("heading", { name: "토론 준비" })).toBeVisible();
+  await expect(page.getByText(/서점 이름이 왜 끝까지/)).toBeVisible();
+  await expect(
+    page.getByText("체험 독자 (나) 님은 아직 1장을", { exact: false }),
+  ).toBeVisible();
+  expect(await page.content()).not.toContain(SECOND_CHAPTER_QUOTE);
+  await page.getByRole("link", { name: "인용과 감상" }).click();
+
   // 진도를 2장 50%로 올린다. 막대는 fill로 채울 수 없어 값을 넣고 input 이벤트를 보낸다.
   await page.getByRole("button", { name: "내 진도 기록" }).click();
   const panel = page.locator("#tool-progress");
