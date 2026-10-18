@@ -41,8 +41,21 @@ test("체험하기로 들어가 진도를 올리면 잠긴 글이 열린다", as
   });
   await panel.getByRole("button", { name: "진도 저장" }).click();
   await expect(panel.getByText("진도를 저장했어요")).toBeVisible();
+  // 저장한 뒤에도 고른 값이 그대로 보여야 한다(폼 자동 초기화로 1장으로 돌아가던 문제).
+  await expect(panel.getByLabel("읽고 있는 장")).toHaveValue("2");
 
   await expect(page.getByText(SECOND_CHAPTER_QUOTE)).toBeVisible();
+
+  // 완독을 저장하면 체크가 유지되고, 풀어서 다시 저장하면 풀린 채로 남는다.
+  const finished = panel.getByRole("checkbox");
+  await finished.check();
+  await panel.getByRole("button", { name: "진도 저장" }).click();
+  await expect(panel.getByText(/완독을 기록했어요/)).toBeVisible();
+  await expect(finished).toBeChecked();
+  await finished.uncheck();
+  await panel.getByRole("button", { name: "진도 저장" }).click();
+  await expect(panel.getByText("진도를 저장했어요")).toBeVisible();
+  await expect(finished).not.toBeChecked();
 
   await page.getByRole("button", { name: "로그아웃" }).click();
   await expect(page.getByRole("link", { name: "로그인" })).toBeVisible();
