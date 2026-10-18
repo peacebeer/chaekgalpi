@@ -4,6 +4,7 @@ import { notFound } from "next/navigation";
 import { Suspense } from "react";
 
 import { DiscussionSection } from "@/components/exchange/discussion-section";
+import { EssaySection } from "@/components/exchange/essay-section";
 import { ExchangeSection } from "@/components/exchange/exchange-section";
 import { BookCover } from "@/components/groups/book-cover";
 import { ConfirmAction } from "@/components/groups/confirm-action";
@@ -38,6 +39,7 @@ export const metadata: Metadata = { title: "그룹 · 책갈피" };
 const TABS = [
   ["feed", "인용과 감상"],
   ["discuss", "토론 준비"],
+  ["essay", "감상문"],
   ["progress", "진도 현황"],
   ["book", "책 정보"],
   ["info", "그룹 정보"],
@@ -360,6 +362,17 @@ async function GroupDetail({
                       )
                 }
                 pageMap={pageMap}
+              />
+            )}
+
+            {tab === "essay" && (
+              <EssaySection
+                groupId={group.id}
+                userId={user.id}
+                book={{ title: book.title, author: book.author }}
+                wholeBook={wholeBook}
+                pageMap={pageMap}
+                finished={Boolean(me.finished_at)}
               />
             )}
 
